@@ -38,12 +38,11 @@ from dotenv import load_dotenv
 from typing import List
 from PIL import Image, ImageOps, ImageDraw
 import pytz
-from mediawiki import MediaWiki
 
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 bot = commands.Bot(
-    command_prefix="!",
+    command_prefix=";;",
     intents=discord.Intents.all(),
     help_command=None
 )
@@ -67,9 +66,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-wiki = MediaWiki(url='https://powerlisting.fandom.com/api.php')
-wiki.user_agent = 'avr4e-powerscraper'
 
 
 @app.on_event("startup")
@@ -120,7 +116,7 @@ class ActionParam():
     is_halved: bool = False
     thumbnail: str = ""
     is_critical: bool = False
-    usages: int = 1
+    counts: int = 1
     multiroll: int = 1
     level: int = 0
 
@@ -266,7 +262,7 @@ def process_message(message: str) -> str:
 
 @bot.event
 async def on_ready():
-    daily_task_run.start()
+    # daily_task_run.start()
     try:
         synced = await bot.tree.sync()
         print(f"Synced {len(synced)} commands")
@@ -283,50 +279,29 @@ async def ping(ctx):
 @bot.command()
 async def help(ctx):
     embed = discord.Embed()
-    embed.title = "Avr4e Commands"
+    embed.title = "Botsteel Commands"
     desc = ""
     desc += "## Commands List\n"
-    desc += "- Add to Discord: `!add <link to sheet>`\n"
-    desc += "- Update: `!update`\n"
-    desc += "- View Sheet: `!sheet`\n"
-    desc += "\n"
+    desc += "- Add to Discord: `;;add <link to sheet>`\n"
+    desc += "- Update: `;;update`\n"
+    desc += "- View Sheet: `;;sheet`\n"
     desc += "### Actions\n"
-    desc += "- List: `!a`\n"
-    desc += "- Do action: `!a <action name>`\n"
-    desc += "- Checks: `!c <skill name>`\n"
-    desc += "- Action & Check Modifiers:\n"
-    desc += "  - Adv/Dis: `!a <action> adv/dis` `!c <skill> adv/dis`\n"
-    desc += "  - Situational Modifier: `!a <action> -b <amount>` "
-    desc += "`!c <skill> -b <amount>`\n"
-    desc += "  - Multiroll X times: `!a <action> -rr X` `!c <skill> -rr X`\n"
-    desc += "  - Check Level DC: `!c <skill> -l X`\n"
-    desc += "  - Action Only:\n"
-    desc += "    - Situational Damage: `!a <action> -d <amount>`\n"
-    desc += "    - Multi Target: `!a <action> -t <target1> -t <target2>`\n"
-    desc += "    - Use X Power Point: `!action <action_name> -u X`\n"
-    desc += "    - Autocrit: `!a <action_name> crit`\n"
+    desc += "- List: `;;a`\n"
+    desc += "- Do action: `;;a <action name>`\n"
+    desc += "- Action Modifiers:\n"
+    desc += "  - Edge: `;;a <action> -e`\n"
+    desc += "  - Double Edge: `;;a <action> -de`\n"
+    desc += "  - Bane: `;;a <action> -bn`\n"
+    desc += "  - Double Bane: `;;a <action> -db`\n"
+    desc += "  - Situational Modifier: `;;a <action> -b <amount>`\n"
+    desc += "### Resources\n"
+    desc += "- List: `;;r`\n"
+    desc += "- See Counter: `;;r <counter name>`\n"
+    desc += "- Add/remove counter: `;;r <counter name> <number/dice command (can be negative)>`\n"
     desc += "\n"
-    desc += "**Taking Rest**\n"
-    desc += "- Short Rest: `!reset sr`\n"
-    desc += "- Extended Rest: `!reset`\n"
-    desc += "\n"
-    desc += "### Init Tracker\n"
-    desc += "- Starting init: `!i begin`\n"
-    desc += "- Joining init: `!i join -b <extra init bonus>`\n"
-    desc += "- Adding monster/init manually: `!i add <name> <init modifier>` or `!i add <name> -p <init position>`\n"
-    desc += "  Parameters:\n"
-    desc += "  - AC Value: `-ac <ac number>` default 0\n"
-    desc += "  - Fortitude Value: `-fort <fort number>` default 0\n"
-    desc += "  - Reflex Value: `-ref <reflex number>` default 0\n"
-    desc += "  - Will Value: `-will <will number>` default 0\n"
-    desc += "- Editing init: `!i edit <name> -p <new init>`\n"
-    desc += "- Moving init: `!i next` \n"
-    desc += "- Removing init: `!i remove <name>`\n"
-    desc += "- Stop init: `!i end`\n"
-    desc += "\n"
-    desc += "### Fun\n"
-    desc += "Random superpower generator: `!sp`"
-    desc += "\n"
+    desc += "**Reseting Counters**\n"
+    desc += "- Encounter Ends: `;;reset`\n"
+    desc += "- Respite: `;;respite`\n"
     embed.description = desc
 
     await ctx.send(embed=embed)
@@ -441,19 +416,27 @@ async def add_sheet(ctx: commands.Context, url=""):
             return
         df_data = get_df(spreadsheet_id, "data")
         actions_data = get_df(spreadsheet_id, "actions")
+        counters_data = get_df(spreadsheet_id, "counters")
         data_dict = create_data_dict(df_data)
         embed = create_embed(data_dict)
 
         # clean empty cells
         actions_data = actions_data.applymap(
             lambda x: x.strip() if isinstance(x, str) else x)
-        actions_data['MaxUsages'] = actions_data['MaxUsages'].replace('', 0, )
-        actions_data['Usages'] = actions_data['Usages'].replace('', 0, )
+        actions_data['Cost'] = actions_data['Cost'].replace('', 0, )
         actions_data = actions_data.replace('#REF!', None, )
         actions_data = actions_data[
             actions_data['Name'].str.strip().astype(bool)
         ]
         actions_data = actions_data.dropna()
+
+        counters_data = counters_data.applymap(
+            lambda x: x.strip() if isinstance(x, str) else x)
+        counters_data["Max"] = counters_data['Max'].replace('', 0, )
+        counters_data["Count"] = counters_data['Max']
+        counters_data = counters_data.replace('#REF!', None, )
+        counters_data = counters_data.dropna()
+
         df_data = df_data.replace('#REF!', None)
         df_data = df_data.dropna()
 
@@ -464,6 +447,7 @@ async def add_sheet(ctx: commands.Context, url=""):
             name,
             df_data.to_json(),
             actions_data.to_json(),
+            counters_data.to_json(),
             sheet_url=url
         )
         await ctx.send(f"Sheet `{name}` is added.", embed=embed)
@@ -478,8 +462,8 @@ async def add_sheet(ctx: commands.Context, url=""):
 async def update_sheet(ctx: commands.Context, url=""):
     try:
         character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
-        old_actions_data = pd.read_json(io.StringIO(character[3]))
-        url = character[4]
+        old_counter_data = pd.read_json(io.StringIO(character[4]))
+        url = character[5]
         spreadsheet_id = get_spreadsheet_id(url)
         if spreadsheet_id == "":
             await ctx.send("Please provide a url")
@@ -487,13 +471,13 @@ async def update_sheet(ctx: commands.Context, url=""):
         df_data = get_df(spreadsheet_id, "data")
         actions_data = get_df(spreadsheet_id, "actions")
         data_dict = create_data_dict(df_data)
+        counters_data = get_df(spreadsheet_id, "counters")
         embed = create_embed(data_dict)
 
         # clean empty cells
         actions_data = actions_data.applymap(
             lambda x: x.strip() if isinstance(x, str) else x)
-        actions_data['MaxUsages'] = actions_data['MaxUsages'].replace('', 0)
-        actions_data['Usages'] = actions_data['Usages'].replace('', 0)
+        actions_data['Cost'] = actions_data['Cost'].replace('', 0, )
         actions_data = actions_data.replace('#REF!', None)
         actions_data = actions_data[
             actions_data['Name'].str.strip().astype(bool)
@@ -502,18 +486,26 @@ async def update_sheet(ctx: commands.Context, url=""):
         df_data = df_data.replace('#REF!', None)
         df_data = df_data.dropna()
 
-        old_actions_data['Usages_numeric'] = pd.to_numeric(
-            old_actions_data['Usages'], errors='coerce').fillna(0)
+        
+        counters_data = counters_data.applymap(
+            lambda x: x.strip() if isinstance(x, str) else x)
+        counters_data["Max"] = counters_data['Max'].replace('', 0, )
+        counters_data["Count"] = counters_data['Max']
+        counters_data = counters_data.replace('#REF!', None, )
+        counters_data = counters_data.dropna()
+
+        old_counter_data['count_numeric'] = pd.to_numeric(
+            old_counter_data['Count'], errors='coerce').fillna(0)
         madf = pd.merge(
-            actions_data,
-            old_actions_data[['Name', 'Usages_numeric']],
+            counters_data,
+            old_counter_data[['Name', 'count_numeric']],
             on='Name',
             how='left'
         )
-        madf['Usages'] = madf['Usages_numeric'].combine_first(
-            madf['Usages']
+        madf['Count'] = madf['count_numeric'].combine_first(
+            madf['Count']
         )
-        madf = madf.drop(columns=['Usages_numeric'])
+        madf = madf.drop(columns=['count_numeric'])
 
         name = df_data[df_data['field_name'] == 'Name']['value'].iloc[0]
         charaRepo.set_character(
@@ -521,6 +513,7 @@ async def update_sheet(ctx: commands.Context, url=""):
             ctx.author.id,
             name,
             df_data.to_json(),
+            actions_data.to_json(),
             madf.to_json(),
             sheet_url=url)
         await ctx.send(f"Sheet `{name}` is updated.", embed=embed)
@@ -544,25 +537,28 @@ async def reset(ctx: commands.Context, *, args=None):
     try:
         await ctx.message.delete()
         character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
-        actions = pd.read_json(io.StringIO(character[3]))
-        if args is None:
-            actions['Usages'] = actions['MaxUsages']
-            message = "All actions are reset."
-        else:
-            max_usages = actions['MaxUsages']
-            actions.loc[actions['ResetOn'] == args, 'Usages'] = max_usages
-            message = f"`{args}` actions are reset."
-        charaRepo.update_character(character[0], None, actions.to_json())
+        counters = pd.read_json(io.StringIO(character[4]))
+        max_counts = counters['Max']
+        counters.loc[counters['ResetOnRespite'] == "FALSE", 'Count'] = max_counts
+        charaRepo.update_character(character[0], None, None, counters.to_json())
         embed = discord.Embed()
-        embed.title = f"{character[1]}'s Actions"
-        description = ""
-        for i, row in actions.iterrows():
-            if row['MaxUsages'] <= 0:
-                continue
-            usages_quota = f"({row['Usages']}/{row['MaxUsages']})"
-            description += f"- **{row['Name']}** {usages_quota}\n"
-        embed.description = description
-        await ctx.send(message, embed=embed)
+        embed.title = f"Encounter resources reset!"
+        await ctx.send(embed=embed)
+    except Exception as e:
+        print(e, traceback.format_exc())
+        await ctx.send("Error. Please check input again.")
+
+@bot.command()
+async def respite(ctx: commands.Context, *, args=None):
+    try:
+        await ctx.message.delete()
+        character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
+        counters = pd.read_json(io.StringIO(character[4]))
+        counters['Count'] = counters['Max']
+        charaRepo.update_character(character[0], None, None, counters.to_json())
+        embed = discord.Embed()
+        embed.title = f"All resources reset!"
+        await ctx.send(embed=embed)
     except Exception as e:
         print(e, traceback.format_exc())
         await ctx.send("Error. Please check input again.")
@@ -577,6 +573,7 @@ async def action(ctx: commands.Context, *, args=None):
         name = character[1]
         data = pd.read_json(io.StringIO(character[2]))
         actions = pd.read_json(io.StringIO(character[3]))
+        resources = pd.read_json(io.StringIO(character[4]))
         if args is None:
             embeds = create_action_list_embed(name, actions)
             view = Paginator(ctx.author, embeds)
@@ -586,42 +583,13 @@ async def action(ctx: commands.Context, *, args=None):
             return
         else:
             args = translate_cvar(args, data)
-            embed = await handle_action(args, actions, ctx, data, sheet_id)
+            embed = await handle_action(args, actions, ctx, data, resources, sheet_id)
         if embed is None:
             return
         await ctx.send(embed=embed)
     except Exception as e:
         print(e, traceback.format_exc())
         await ctx.send("Error. Please check input again. " + str(e))
-
-
-@bot.command()
-async def token(ctx: commands.Context, *, args=None):
-    try:
-        if args is None:
-            await ctx.message.delete()
-            character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
-            data = pd.read_json(io.StringIO(character[2]))
-            embed = discord.Embed()
-            name = data[data['field_name'] == 'Name']['value'].iloc[0]
-            token = data[data['field_name'] == 'Thumbnail']['value'].iloc[0]
-            embed.title = name
-            embed.set_image(url=token)
-            await ctx.send(embed=embed)
-        if args == "shinreigumi":
-            await ctx.message.delete()
-            character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
-            data = pd.read_json(io.StringIO(character[2]))
-            name = data[data['field_name'] == 'Name']['value'].iloc[0]
-            token = data[data['field_name'] == 'Thumbnail']['value'].iloc[0]
-            new_token = add_border_template(
-                token, "shinreigumi_border.png", name)
-            file_token = discord.File(new_token, filename=f"{name}.png")
-            await ctx.send(file=file_token)
-            os.remove(new_token)
-    except Exception as e:
-        print(e, traceback.format_exc())
-        await ctx.send("Error. Please check input again.")
 
 
 def create_action_list_embed(name: str, df: pd.DataFrame):
@@ -631,19 +599,17 @@ def create_action_list_embed(name: str, df: pd.DataFrame):
     description = ""
     # embed.title = f"{name}'s Actions"
     try:
-        for type1 in df['Type1'].unique().tolist():
+        for type1 in df['Action'].unique().tolist():
             field_dict[type1] = ""
-            for _, row in df[df['Type1'] == type1].iterrows():
+            for _, row in df[df['Action'] == type1].iterrows():
                 action_name = row['Name']
-                usages = ""
-                if row['MaxUsages'] > 0:
-                    usages = f" ({row['Usages']}/{row['MaxUsages']})"
                 type2 = ""
-                if row['Type2']:
-                    type2 = f" ({row['Type2']})"
+                if row['Cost']:
+                    type2 = f" ({row['Cost']})"
                 field_dict[type1] += f"- **{row['Name']}**{type2}."
-                field_dict[type1] += f" {row['ShortDesc']}{usages}\n"
-    except Exception:
+                field_dict[type1] += f" {row['ShortDesc']}\n"
+    except Exception as e:
+        print(e)
         raise ValueError(f"Error Here: {action_name}")
 
     for key, value in field_dict.items():
@@ -677,7 +643,8 @@ async def handle_action(
         df: pd.DataFrame,
         ctx: commands.Context,
         data: pd.DataFrame,
-        sheet_id: str):
+        resources: pd.DataFrame,
+        sheet_id:str):
     ap = parse_command(command)
     possible_action = df[df['Name'].str.contains(
         ap.name,
@@ -696,32 +663,27 @@ async def handle_action(
     else:
         choosen = 0
     embed = create_action_result_embed(possible_action, choosen, name, ap)
-    max_usages = possible_action['MaxUsages'].iloc[choosen]
-    usages = possible_action['Usages'].iloc[choosen]
-    if max_usages > 0:
-        action_name = possible_action['Name'].iloc[choosen]
-        new_usages = usages - ap.usages
-        increment = f" ({format_bonus(str(-ap.usages))})"
-        if new_usages < 0:
-            new_usages = usages
-            embed.title = f"{name} cannot use {action_name}."
-            increment = f" (Out of Usages; {format_bonus(str(-ap.usages))})"
-        elif new_usages > max_usages:
-            new_usages = max_usages
-        usages_value = draw_quota(max_usages, new_usages)
-        usages_value += increment
-        embed.add_field(name=action_name, value=usages_value, inline=False)
-        df.loc[df['Name'] == action_name, 'Usages'] = new_usages
-        charaRepo.update_character(sheet_id, None, df.to_json())
+    cost = possible_action['Cost'].iloc[choosen]
+    if cost and cost.split(' ')[0] != '0':
+        hr = resources.iloc[3]
+        hr_name = hr["Name"]
+        hr_count = hr["Count"]
+        cost_numeric = int(cost.split(" ")[0])*-1
+        hr_count = hr_count + cost_numeric
+        resources.loc[3, "Count"] = hr_count
+        resource_str = str(hr_count) + " (" + format_bonus(str(cost_numeric)) + ")"
+        embed.add_field(name="⚡ " + hr_name, value=resource_str)
+        charaRepo.update_character(sheet_id, None, None, resources.to_json())
+
     return embed
 
 
 def parse_command(message: str) -> ActionParam:
     appended_args = [
-        "-b", "-d", "adv", "dis", "-adv", "-dis"
+        "-b", "-de", "-db", "-e", "-bn"
     ]
     general_args = [
-        "-h", "-crit", "-u", "crit", "-rr", "-l"
+        "-h", "-crit", "-u", "crit", "-rr", "-l", "-a"
     ]
     dict_of_args = {}
 
@@ -757,7 +719,7 @@ def parse_command(message: str) -> ActionParam:
         is_halved=False,
         thumbnail="",
         is_critical=False,
-        usages=1
+        counts=0
     )
 
     for key, value in dict_of_args.items():
@@ -767,16 +729,22 @@ def parse_command(message: str) -> ActionParam:
             param.d20_bonus = format_bonus(splitted_message[value+1])
         elif key == "-d":
             param.damage_bonus = format_bonus(splitted_message[value+1])
-        elif key == "adv" or key == "-adv":
+        elif key == "-e":
+            param.d20_bonus = "+2"
+        elif key == "-bn":
+            param.d20_bonus = "-2"
+        elif key == "-de":
             param.is_adv = True
-        elif key == "dis" or key == "-dis":
+        elif key == "-db":
             param.is_dis = True
         elif key == "-h":
             param.is_halved = True
         elif key == "-crit" or key == "crit":
             param.is_critical = True
         elif key == "-u":
-            param.usages = int(splitted_message[value+1])
+            param.counts = int(splitted_message[value+1])*-1
+        elif key == "-a":
+            param.counts = int(splitted_message[value+1])
         elif key == "-rr":
             param.multiroll = int(splitted_message[value+1])
         elif key == "-l":
@@ -805,7 +773,7 @@ def parse_command(message: str) -> ActionParam:
         else:
             param.targets.append(
                 TargetParam(
-                    name="Meta",
+                    name="🎲 Power Roll",
                     damage_bonus=param.damage_bonus,
                     d20_bonus=param.d20_bonus,
                     is_adv=param.is_adv,
@@ -818,7 +786,7 @@ def parse_command(message: str) -> ActionParam:
 
 def parse_target_param(message: str) -> TargetParam:
     list_of_args = [
-        "-b", "-d", "adv", "dis", "-dis", "-adv"
+        "-b", "-de", "-db"
     ]
     dict_of_args = {}
 
@@ -844,11 +812,9 @@ def parse_target_param(message: str) -> TargetParam:
             continue
         if key == "-b":
             param.d20_bonus = format_bonus(splitted_message[value+1])
-        elif key == "-d":
-            param.damage_bonus = format_bonus(splitted_message[value+1])
-        elif key == "adv" or key == "-adv":
+        elif key == "-de":
             param.is_adv = True
-        elif key == "dis" or key == "-dis":
+        elif key == "-db":
             param.is_dis = True
 
     return param
@@ -907,6 +873,24 @@ async def get_user_choice(
         await option_message.delete()
         return choosen
 
+def get_tier(roll_res: int, is_adv: bool, is_dis: bool):
+    tier = 1
+    if roll_res < 12:
+        tier = 1
+    elif roll_res > 16:
+        tier = 3
+    else:
+        tier = 2
+    
+    if is_adv and is_dis:
+        pass
+    elif is_adv and tier != 3:
+        tier += 1
+    elif is_dis and tier != 1:
+        tier -= 1
+
+    return tier
+
 
 def create_action_result_embed(
         possible_action: pd.DataFrame,
@@ -915,73 +899,80 @@ def create_action_result_embed(
         ap: ActionParam):
     embed = discord.Embed()
     action_name = possible_action['Name'].iloc[choosen]
-    embed_description = ""
-    critdie = ""
-    flavor = str(possible_action['Flavor'].iloc[choosen])
+    action_type = possible_action['Action'].iloc[choosen]
+    embed_description = f"-# `{action_type}`"
+    # flavor = str(possible_action['Flavor'].iloc[choosen])
     effect = str(possible_action['Effect'].iloc[choosen])
-    to_hit = str(possible_action['To Hit'].iloc[choosen])
-    damage = str(possible_action['Damage'].iloc[choosen])
+    bonus = str(possible_action['Bonus'].iloc[choosen])
+    is_roll = str(possible_action['IsRoll'].iloc[choosen])
     image = str(possible_action['Image'].iloc[choosen])
+    cost = str(possible_action['Cost'].iloc[choosen])
+    tgt = str(possible_action['Target'].iloc[choosen])
     range = str(possible_action['Range'].iloc[choosen])
-    def_target = str(possible_action['DefTarget'].iloc[choosen])
-    if 'FreeText' in possible_action:
-        embed_description = str(possible_action['FreeText'].iloc[choosen])
-    if 'Critdie' in possible_action:
-        critdie = format_bonus(str(possible_action['Critdie'].iloc[choosen]))
+    trigger = str(possible_action['Trigger'].iloc[choosen])
+    tier_1 = possible_action['T1'].iloc[choosen]
+    tier_2 = possible_action['T2'].iloc[choosen]
+    tier_3 = possible_action['T3'].iloc[choosen]
+    if 'Description' in possible_action and possible_action['Description'].iloc[choosen]:
+        embed_description += "\n" + str(possible_action['Description'].iloc[choosen])
     meta = ""
-
-    def is_aoe(range: str):
-        if (
-            range.lower().find("close") != -1 or
-            range.lower().find("area") != -1
-        ):
-            return True
-        return False
+    is_crit = False
 
     embed.title = f"{name} uses {action_name}!"
-    hit_description = "To Hit"
-    if def_target:
-        hit_description = f"To Hit vs {def_target}"
-    if is_aoe(range):
-        if damage:
-            expression = damage + ap.damage_bonus
-            expression = expression_str(expression, ap.is_halved)
-            damage_result = d20.roll(expression)
-            crit_expression = crit_damage_expression(expression) + critdie
-            crit_result = d20.roll(crit_expression)
+    hit_description = ""
+
     for target in ap.targets:
         meta = ""
-        if not ap.is_critical and to_hit:
-            if to_hit[0] == "d":
-                to_hit = "1"+to_hit
-            if target.is_adv and target.is_dis:
-                pass
-            elif target.is_adv:
-                to_hit = to_hit.replace("1d20", "2d20kh1")
-            elif target.is_dis:
-                to_hit = to_hit.replace("1d20", "2d20kl1")
-            expression = to_hit + target.d20_bonus
+        if is_roll:
+            to_hit = "2d10"
+            bonus_string = ""
+            if bonus:
+                bonus_string += format_bonus(bonus)
+            bonus_string += target.d20_bonus
+            expression = to_hit + bonus_string
             expression = expression_str(expression, ap.is_halved)
             hit_result = d20.roll(expression)
-            meta += f"**{hit_description}**: {hit_result}\n"
-        if damage and not is_aoe(range):
-            expression = damage + target.damage_bonus
-            expression = expression_str(expression, ap.is_halved)
-            if ap.is_critical or (to_hit and hit_result.crit == 1):
-                expression = crit_damage_expression(expression) + critdie
-            damage_result = d20.roll(expression)
-            meta += f"**Damage**: {damage_result}\n"
-        elif damage and is_aoe(range):
-            aoedamage = damage_result
-            if ap.is_critical or (to_hit and hit_result.crit == 1):
-                aoedamage = crit_result
-            meta += f"**Damage**: {aoedamage}\n"
-        if to_hit or damage:
-            embed.add_field(name=target.name, value=meta, inline=False)
-    if flavor:
-        embed.add_field(name="Description", value=flavor, inline=False)
+            hit_description += hit_result.result
+            if target.is_adv: hit_description += " With Double Edge"
+            if target.is_dis: hit_description += " With Double Bane"
+            tier = get_tier(hit_result.total, target.is_adv, target.is_dis)
+            if d20.roll(str(hit_result.total)+"- ("+bonus_string+")").total > 18:
+                is_crit = True
+
+            tier_desc = ""
+            match tier:
+                case 1:
+                    tier_desc = "**T1:** " + tier_1
+                case 2:
+                    tier_desc = "**T2:** " + tier_2
+                case 3:
+                    tier_desc = "**T3:** " + tier_3
+            meta += f"{hit_description}:\n{tier_desc}\n"
+            if is_crit:
+                meta += f"`⟡ CRITICAL SUCCESS! ⟡`\n"
+            
+            if to_hit:
+                embed.add_field(name=target.name, value=meta, inline=False)
+    if is_roll:
+        tier_desc = f"- ≤11: {tier_1}\n- 12-16: {tier_2}\n- 17+: {tier_3}"
+        embed.add_field(name="⚔️ Tiers", value=tier_desc, inline=False)
+
+    power_desc = ""
+
+    if trigger:
+        power_desc += f"**Trigger:** {trigger}\n"
+    if cost and not cost == "0":
+        power_desc += f"**Cost:** {cost}\n"
+    if range:
+        power_desc += f"**Range:** {range}\n"
+    if tgt:
+        power_desc += f"**Target:** {tgt}\n"
+
+    if power_desc:
+        embed.add_field(name="🔰 Description", value=power_desc, inline=False)
+    
     if effect:
-        embed.add_field(name="Effect", value=effect, inline=False)
+        embed.add_field(name="🌀 Effect", value=effect, inline=False)
     if image:
         embed.set_image(url=image)
     if ap.thumbnail:
@@ -990,19 +981,16 @@ def create_action_result_embed(
     embed.description = embed_description
     return embed
 
-
-@bot.command(aliases=["c"])
-async def check(ctx: commands.Context, *, args=None):
+@bot.command(aliases=["r"])
+async def counter(ctx: commands.Context,  *, args=None):
     try:
         await ctx.message.delete()
-        if args is None:
-            await ctx.send("Please specify check to roll.")
-            return
         character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
-        # sheet_id = character[0]
+        sheet_id = character[0]
         name = character[1]
+        counters = pd.read_json(io.StringIO(character[4]))
         data = pd.read_json(io.StringIO(character[2]))
-        embed = await handle_check(args, data, ctx, name)
+        embed = await handle_counter(args, counters, data, ctx, name, sheet_id)
         if embed is None:
             return
         await ctx.send(embed=embed)
@@ -1010,98 +998,69 @@ async def check(ctx: commands.Context, *, args=None):
         print(e, traceback.format_exc())
         await ctx.send("Error. Please check input again.")
 
+def create_counter_list_embed(name: str, df: pd.DataFrame):
+    description = ""
+    # embed.title = f"{name}'s Actions"
+    description += "\n".join(
+        "• " + df["Name"].astype(str) + ": " + df["Count"].astype(str)
+    )
 
-def perform_check_roll(
-        possible_check: pd.DataFrame,
-        chosen: int,
-        ap: ActionParam):
-    if ap.is_adv and ap.is_dis:
-        dice_expr = "1d20"
-    elif ap.is_adv:
-        dice_expr = "2d20kh1"
-    elif ap.is_dis:
-        dice_expr = "2d20kl1"
-    else:
-        dice_expr = "1d20"
-
-    modifier = format_number(possible_check['value'].iloc[chosen])
-    check_name = possible_check['field_name'].iloc[chosen]
-
-    base_expr = f"{dice_expr}{modifier}{ap.d20_bonus}"
-    if ap.is_halved:
-        base_expr = halve_flat_modifiers(base_expr)
-
-    results = [d20.roll(base_expr) for _ in range(ap.multiroll)]
-    return str(check_name), results
-
-
-def create_check_result_embed(
-        possible_check: pd.DataFrame,
-        choosen: int,
-        name: str,
-        ap: ActionParam,
-        level: int = 0
-):
     embed = discord.Embed()
-    results = []
-    check_name, results = perform_check_roll(possible_check, choosen, ap)
-    embed.title = f"{name} makes {check_name} check!"
-    if len(results) <= 0:
-        embed.description = "No such check found."
-        return embed
-    if len(results) == 1:
-        embed.description = f"{results[0]}"
-    else:
-        for i in range(len(results)):
-            embed.add_field(
-                name=f"Check {i+1}",
-                value=results[i],
-                inline=True
-            )
-    if ap.thumbnail:
-        embed.set_thumbnail(url=ap.thumbnail)
-    if ap.level > 0:
-        level = ap.level
-    if level > 0:
-        emoji = {
-            "Easy": "🟢ᴇᴀꜱʏ",
-            "Moderate": "🟡ᴍᴏᴅᴇʀᴀᴛᴇ",
-            "Hard": "🔴ʜᴀʀᴅ",
-        }
-        dc = (
-            " | ".join(f"{emoji[difficulty]} {value}"
-                       for difficulty, value
-                       in constant.LEVEL_SKILL_DC[level].items())
-        )
-        embed.set_footer(
-            text=dc
-        )
+    embed.title = f"{name}'s Resources"
+    embed.description = description
+
     return embed
 
-
-async def handle_check(
+async def handle_counter(
         command: str,
         df: pd.DataFrame,
+        data: pd.DataFrame,
         ctx: commands.Context,
-        name: str):
+        name: str, sheet_id: str):
+    if not command:
+        return create_counter_list_embed(name, df)
     ap = parse_command(command)
-    rollable_check = df[df['is_rollable'] == 'TRUE']
-    possible_check = rollable_check[rollable_check['field_name'].str.contains(
+    counts_roll = None
+    if len(command.split(" ")) == 2:
+        ap.name = command.split(" ")[0]
+        counts_roll = d20.roll(command.split(" ")[1])
+        ap.counts = counts_roll.total
+
+    embed = discord.Embed()
+    possible_counters = df[df['Name'].str.contains(
         ap.name, case=False
     )]
-    ap.thumbnail = df[df['field_name'] == 'Thumbnail']['value'].iloc[0]
-    level = df[df['field_name'] == 'Level']['value'].values
-    level = parse_value(level[0])
-    if len(possible_check) <= 0:
-        await ctx.send("No such check found.")
+    ap.thumbnail = data[data['field_name'] == 'Thumbnail']['value'].iloc[0]
+    if len(possible_counters) <= 0:
+        await ctx.send("No such counter found.")
         return None
-    elif len(possible_check) > 1:
-        choosen = await get_user_choice(possible_check, 'field_name', ctx)
+    elif len(possible_counters) > 1:
+        choosen = await get_user_choice(possible_counters, 'Name', ctx)
         if choosen is None:
             return None
     else:
         choosen = 0
-    return create_check_result_embed(possible_check, choosen, name, ap, level)
+    counter_name = possible_counters['Name'].iloc[choosen]
+    description = possible_counters['Description'].iloc[choosen]
+    max_counts = possible_counters['Max'].iloc[choosen]
+    counts = possible_counters['Count'].iloc[choosen]
+    new_counts = counts + ap.counts
+    if new_counts > max_counts and max_counts != 0:
+        new_counts = max_counts
+    df.loc[df['Name'] == counter_name, 'Count'] = new_counts
+    charaRepo.update_character(sheet_id, None, None, df.to_json())
+
+    embed.title = f"{name}'s {counter_name}: {new_counts}"
+    if max_counts != 0:
+        embed.title += f"/{max_counts}"
+    if counts_roll and "d" in command.split(" ")[1].lower():
+        embed.title += f" (+ [{counts_roll.result}])"
+    elif (ap.counts):
+        embed.title += f" ({format_bonus(str(ap.counts))})"
+    embed.description = description
+    
+
+    return embed
 
 
 def parse_value(value) -> int:
@@ -1171,6 +1130,7 @@ def create_data_dict(df: pd.DataFrame) -> dict:
 def create_embed(data_dict: dict) -> discord.Embed:
     embed = discord.Embed()
 
+
     for category, fields in data_dict.items():
         if category == "Special":
             embed.title = fields['Title']
@@ -1181,14 +1141,20 @@ def create_embed(data_dict: dict) -> discord.Embed:
         if category == "CVAR":
             continue
         field_value = ''
-        for field_name, value in fields.items():
-            if is_formatted_number(str(value)):
-                field_value = field_value + f"{field_name} {value}, "
-                continue
-            if field_name:
-                field_value = field_value + f"**{field_name}**: {value}\n"
-            else:
-                field_value = field_value + f"{value}\n"
+
+        if category == "SKILL":
+            for field_name, value in fields.items():
+                if field_name:
+                    field_value = field_value + f"{value}: {field_name}\n"
+        else:
+            for field_name, value in fields.items():
+                # if is_formatted_number(str(value)):
+                #     field_value = field_value + f"{field_name} {value}, "
+                #     continue
+                if field_name and value:
+                    field_value = field_value + f"**{field_name}**: {value}\n"
+                elif value:
+                    field_value = field_value + f"{value}\n"
         field_value = field_value.rstrip(", ")
         field_value = field_value.rstrip()
         embed.add_field(name=category, value=field_value, inline=False)
@@ -1216,11 +1182,11 @@ def is_formatted_number(string: str):
     return bool(re.match(pattern, string))
 
 
-def draw_quota(max_usages: int, usages: int) -> str:
-    used = max_usages - usages
-    if usages <= 0:
-        return max_usages * "〇"
-    return usages * "◉" + used * "〇"
+def draw_quota(max_counts: int, counts: int) -> str:
+    used = max_counts - counts
+    if counts <= 0:
+        return max_counts * "〇"
+    return counts * "◉" + used * "〇"
 
 
 def halve_flat_modifiers(expression: str):
@@ -2150,8 +2116,8 @@ async def add_monster_sheet(ctx: commands.Context, url=""):
         # clean empty cells
         actions_data = actions_data.applymap(
             lambda x: x.strip() if isinstance(x, str) else x)
-        actions_data['MaxUsages'] = actions_data['MaxUsages'].replace('', 0, )
-        actions_data['Usages'] = actions_data['Usages'].replace('', 0, )
+        actions_data['Maxcounts'] = actions_data['Maxcounts'].replace('', 0, )
+        actions_data['counts'] = actions_data['counts'].replace('', 0, )
         actions_data = actions_data.replace('#REF!', None, )
         actions_data = actions_data[
             actions_data['Name'].str.strip().astype(bool)
@@ -2193,8 +2159,8 @@ async def monster_update_sheet(ctx: commands.Context, url=""):
         # clean empty cells
         actions_data = actions_data.applymap(
             lambda x: x.strip() if isinstance(x, str) else x)
-        actions_data['MaxUsages'] = actions_data['MaxUsages'].replace('', 0)
-        actions_data['Usages'] = actions_data['Usages'].replace('', 0)
+        actions_data['Maxcounts'] = actions_data['Maxcounts'].replace('', 0)
+        actions_data['counts'] = actions_data['counts'].replace('', 0)
         actions_data = actions_data.replace('#REF!', None)
         actions_data = actions_data[
             actions_data['Name'].str.strip().astype(bool)
@@ -2203,18 +2169,18 @@ async def monster_update_sheet(ctx: commands.Context, url=""):
         df_data = df_data.replace('#REF!', None)
         df_data = df_data.dropna()
 
-        old_actions_data['Usages_numeric'] = pd.to_numeric(
-            old_actions_data['Usages'], errors='coerce').fillna(0)
+        old_actions_data['counts_numeric'] = pd.to_numeric(
+            old_actions_data['counts'], errors='coerce').fillna(0)
         madf = pd.merge(
             actions_data,
-            old_actions_data[['Name', 'Usages_numeric']],
+            old_actions_data[['Name', 'counts_numeric']],
             on='Name',
             how='left'
         )
-        madf['Usages'] = madf['Usages_numeric'].combine_first(
-            madf['Usages']
+        madf['counts'] = madf['counts_numeric'].combine_first(
+            madf['counts']
         )
-        madf = madf.drop(columns=['Usages_numeric'])
+        madf = madf.drop(columns=['counts_numeric'])
 
         name = "Monsters"
         monsterMapRepo.set_character(
@@ -2282,21 +2248,21 @@ async def monster_reset(ctx: commands.Context, *, args=None):
         character = monsterMapRepo.get_character(ctx.guild.id, ctx.author.id)
         actions = pd.read_json(io.StringIO(character[3]))
         if args is None:
-            actions['Usages'] = actions['MaxUsages']
+            actions['counts'] = actions['Maxcounts']
             message = "All actions are reset."
         else:
-            max_usages = actions['MaxUsages']
-            actions.loc[actions['ResetOn'] == args, 'Usages'] = max_usages
+            max_counts = actions['Maxcounts']
+            actions.loc[actions['ResetOn'] == args, 'counts'] = max_counts
             message = f"`{args}` actions are reset."
         monsterMapRepo.update_character(character[0], None, actions.to_json())
         embed = discord.Embed()
         embed.title = f"{character[1]}'s Actions"
         description = ""
         for i, row in actions.iterrows():
-            if row['MaxUsages'] <= 0:
+            if row['Maxcounts'] <= 0:
                 continue
-            usages_quota = f"({row['Usages']}/{row['MaxUsages']})"
-            description += f"- **{row['Name']}** {usages_quota}\n"
+            counts_quota = f"({row['counts']}/{row['Maxcounts']})"
+            description += f"- **{row['Name']}** {counts_quota}\n"
         embed.description = description
         await ctx.send(message, embed=embed)
     except Exception as e:
@@ -2351,22 +2317,22 @@ async def handle_action_monster(
         choosen = 0
     name = possible_action['MonsterName'].iloc[choosen]
     embed = create_action_result_embed(possible_action, choosen, name, ap)
-    max_usages = possible_action['MaxUsages'].iloc[choosen]
-    usages = possible_action['Usages'].iloc[choosen]
-    if max_usages > 0:
+    max_counts = possible_action['Maxcounts'].iloc[choosen]
+    counts = possible_action['counts'].iloc[choosen]
+    if max_counts > 0:
         action_name = possible_action['Name'].iloc[choosen]
-        new_usages = usages - ap.usages
-        increment = f" ({format_bonus(str(-ap.usages))})"
-        if new_usages < 0:
-            new_usages = usages
+        new_counts = counts - ap.counts
+        increment = f" ({format_bonus(str(-ap.counts))})"
+        if new_counts < 0:
+            new_counts = counts
             embed.title = f"{name} cannot use {action_name}."
-            increment = f" (Out of Usages; {format_bonus(str(-ap.usages))})"
-        elif new_usages > max_usages:
-            new_usages = max_usages
-        usages_value = draw_quota(max_usages, new_usages)
-        usages_value += increment
-        embed.add_field(name=action_name, value=usages_value, inline=False)
-        df.loc[df['Name'] == action_name, 'Usages'] = new_usages
+            increment = f" (Out of counts; {format_bonus(str(-ap.counts))})"
+        elif new_counts > max_counts:
+            new_counts = max_counts
+        counts_value = draw_quota(max_counts, new_counts)
+        counts_value += increment
+        embed.add_field(name=action_name, value=counts_value, inline=False)
+        df.loc[df['Name'] == action_name, 'counts'] = new_counts
         charaRepo.update_character(sheet_id, None, df.to_json())
     return embed
 
@@ -2546,7 +2512,7 @@ async def init(ctx: commands.Context, *args: str):
         elif args[0] == "add":
             if len(args) < 3:
                 await ctx.send(
-                    "Usage: \n • !i add <combatant name> -p <target initiative> [-ac <AC>] [-fort <Fort>] [-ref <Ref>] [-will <Will>]\n • !i add <combatant name> <initiative modifier> [-ac <AC>] [-fort <Fort>] [-ref <Ref>] [-will <Will>]")
+                    "counts: \n • !i add <combatant name> -p <target initiative> [-ac <AC>] [-fort <Fort>] [-ref <Ref>] [-will <Will>]\n • !i add <combatant name> <initiative modifier> [-ac <AC>] [-fort <Fort>] [-ref <Ref>] [-will <Will>]")
                 return
             try:
                 name = args[1]
@@ -2624,7 +2590,7 @@ async def init(ctx: commands.Context, *args: str):
         elif args[0] == "edit":
             if len(args) < 2:
                 await ctx.send(
-                    "Usage: !i edit <combatant name> [-p <initiative>] [-ac <AC>] [-fort <Fort>] [-ref <Ref>] [-will <Will>]")
+                    "counts: !i edit <combatant name> [-p <initiative>] [-ac <AC>] [-fort <Fort>] [-ref <Ref>] [-will <Will>]")
                 return
 
             partial_name = args[1].lower()
@@ -2731,7 +2697,7 @@ async def init(ctx: commands.Context, *args: str):
 
         elif args[0] == "remove":
             if len(args) < 2:
-                await ctx.send("Usage: !i remove <combatant name>")
+                await ctx.send("counts: !i remove <combatant name>")
                 return
 
             partial = args[1].lower()
@@ -2969,69 +2935,6 @@ async def handle_check_monster(
         choosen = 0
     name = possible_check['monster_name'].iloc[choosen]
     return create_check_result_embed(possible_check, choosen, name, ap)
-
-
-@bot.command(aliases=['sp'])
-async def superpower(ctx: commands.Context):
-    try:
-        # Get a random page title
-        title = wiki.random(pages=1)
-
-        # Retrieve the page by title
-        page = wiki.page(title)
-
-        # Get title and URL
-        power_title = page.title
-        power_url = page.url
-
-        # Try to extract a suitable image from the list
-        image_url = None
-        if page.images:
-            valid_images = [
-                img for img in page.images
-                if any(img.lower().endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.gif'])
-                and 'logo' not in img.lower()
-                and 'icon' not in img.lower()
-            ]
-            if valid_images:
-                image_url = random.choice(valid_images)
-
-        # Extract raw wikitext content
-        raw_text = page.wikitext
-
-        # Extract the "==Capabilities==" section using regex
-        match = re.search(r'==\s*Capabilities\s*==\n(.*?)(?=\n==)',
-                          raw_text, re.DOTALL | re.IGNORECASE)
-        capabilities = match.group(1).strip(
-        ) if match else "No capabilities section found."
-
-        # Clean wiki markup (very basic)
-        capabilities_cleaned = re.sub(
-            r'\[\[(?:[^|\]]*\|)?([^\]]+)\]\]', r'\1', capabilities)  # Replace links
-        capabilities_cleaned = re.sub(
-            r"'''(.*?)'''", r'\1', capabilities_cleaned)  # Bold
-        capabilities_cleaned = re.sub(
-            r"''(.*?)''", r'\1', capabilities_cleaned)    # Italic
-        capabilities_cleaned = re.sub(
-            r'{{[^}]+}}', '', capabilities_cleaned)       # Remove templates
-        capabilities_cleaned = re.sub(
-            r'<.*?>', '', capabilities_cleaned)           # Remove HTML tags
-
-        # Discord Embed
-        embed = discord.Embed(
-            title=power_title,
-            url=power_url,
-            description=f"**Capabilities:**\n{capabilities_cleaned[:2045] + '...' if len(capabilities_cleaned) > 2048 else capabilities_cleaned}",
-            color=discord.Color.purple()
-        )
-
-        if image_url:
-            embed.set_image(url=image_url)
-
-        await ctx.send(embed=embed)
-
-    except Exception as e:
-        await ctx.send(f"An error occurred while fetching the superpower: {str(e)}")
 
 if __name__ == "__main__":
     charaRepo = CharacterUserMapRepository()

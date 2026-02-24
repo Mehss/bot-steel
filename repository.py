@@ -37,6 +37,7 @@ class CharacterUserMapRepository(Repository):
             character_name VARCHAR(255) NOT NULL,
             data TEXT NOT NULL,
             actions TEXT NOT NULL,
+            counters TEXT NOT NULL,
             sheet_url TEXT NOT NULL,
             UNIQUE (guild_id, user_id)
         )""")
@@ -50,6 +51,7 @@ class CharacterUserMapRepository(Repository):
             character_name,
             data,
             actions,
+            counters,
             sheet_url
         FROM character_user_map
         WHERE guild_id = ? AND user_id = ?
@@ -69,15 +71,16 @@ class CharacterUserMapRepository(Repository):
             character_name: str,
             data: str,
             actions: str,
+            counters: str,
             sheet_url: str
             ) -> None:
         query = """
         INSERT INTO character_user_map (
-            guild_id, user_id, character_name, data, actions,
+            guild_id, user_id, character_name, data, actions, counters,
             sheet_url
         )
         VALUES (
-            ?, ?, ?, ?, ?,
+            ?, ?, ?, ?, ?, ?,
             ?
         )
         ON CONFLICT (guild_id, user_id)
@@ -85,27 +88,29 @@ class CharacterUserMapRepository(Repository):
                 character_name = ?,
                 data = ?,
                 actions = ?,
+                counters = ?,
                 sheet_url = ?
         """
 
         with self as db:
             db.cursor.execute(query, (
                 guild_id, user_id,
-                character_name, data, actions, sheet_url,
-                character_name, data, actions, sheet_url))
+                character_name, data, actions, counters, sheet_url,
+                character_name, data, actions, counters, sheet_url))
             db.connection.commit()
 
-    def update_character(self, id: int, data: str, actions: str) -> None:
+    def update_character(self, id: int, data: str, actions: str, counters: str) -> None:
         query = """
         UPDATE character_user_map
         SET
             data = COALESCE(?, data),
-            actions = COALESCE(?, actions)
+            actions = COALESCE(?, actions),
+            counters = COALESCE(?, counters)
         WHERE id = ?
         """
 
         with self as db:
-            db.cursor.execute(query, (data, actions, id))
+            db.cursor.execute(query, (data, actions, counters, id))
             db.connection.commit()
 
     def get_all_characters(self, user_id=None):
