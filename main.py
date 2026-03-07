@@ -913,8 +913,8 @@ def create_action_result_embed(
     tier_1 = possible_action['T1'].iloc[choosen]
     tier_2 = possible_action['T2'].iloc[choosen]
     tier_3 = possible_action['T3'].iloc[choosen]
-    if 'Description' in possible_action and possible_action['Description'].iloc[choosen]:
-        embed_description += "\n" + str(possible_action['Description'].iloc[choosen])
+    if 'SmallText' in possible_action and possible_action['SmallText'].iloc[choosen]:
+        embed_description += "\n" + str(possible_action['SmallText'].iloc[choosen])
     meta = ""
     is_crit = False
 
