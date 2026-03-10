@@ -41,4 +41,4 @@ def get_in_game_date(irl_day_number):
             return f"22 {months[month_index]} - 27 {months[month_index]}"
     raise ValueError("Invalid week number computation.")
 
-print(get_in_game_date(11))
+print(get_in_game_date(6))

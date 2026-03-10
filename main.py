@@ -262,7 +262,7 @@ def process_message(message: str) -> str:
 
 @bot.event
 async def on_ready():
-    # daily_task_run.start()
+    daily_task_run.start()
     try:
         synced = await bot.tree.sync()
         print(f"Synced {len(synced)} commands")
