@@ -474,7 +474,7 @@ async def update_sheet(ctx: commands.Context, url=""):
         embed = create_embed(data_dict)
 
         # clean empty cells
-        actions_data = actions_data.applymap(
+        actions_data = actions_data.map(
             lambda x: x.strip() if isinstance(x, str) else x)
         actions_data['Cost'] = actions_data['Cost'].replace('', 0, )
         actions_data = actions_data.replace('#REF!', None)
@@ -486,7 +486,7 @@ async def update_sheet(ctx: commands.Context, url=""):
         df_data = df_data.dropna()
 
         
-        counters_data = counters_data.applymap(
+        counters_data = counters_data.map(
             lambda x: x.strip() if isinstance(x, str) else x)
         counters_data["Max"] = counters_data['Max'].replace('', 0, )
         counters_data["Count"] = counters_data['Max']
@@ -1305,7 +1305,7 @@ async def update_ds(guild_id: int):
                 print(start)
                 continue
             if sheet.title == "downtime":
-                temp_df = temp_df.applymap(
+                temp_df = temp_df.map(
                     lambda x: x.strip() if isinstance(x, str) else x)
                 temp_df['char'] = temp_df['char'].replace('', pd.NA)
                 temp_df = temp_df.dropna(subset=['char'])
@@ -1533,7 +1533,7 @@ async def downtime_sheet(ctx: commands.Context, url: str = ""):
                 print(start)
                 continue
             if sheet.title == "downtime":
-                temp_df = temp_df.applymap(
+                temp_df = temp_df.map(
                     lambda x: x.strip() if isinstance(x, str) else x)
                 temp_df['char'] = temp_df['char'].replace('', pd.NA)
                 temp_df = temp_df.dropna(subset=['char'])
@@ -2124,7 +2124,7 @@ async def add_monster_sheet(ctx: commands.Context, url=""):
         actions_data = get_df(spreadsheet_id, "actions")
 
         # clean empty cells
-        actions_data = actions_data.applymap(
+        actions_data = actions_data.map(
             lambda x: x.strip() if isinstance(x, str) else x)
         actions_data['Maxcounts'] = actions_data['Maxcounts'].replace('', 0, )
         actions_data['counts'] = actions_data['counts'].replace('', 0, )
@@ -2167,7 +2167,7 @@ async def monster_update_sheet(ctx: commands.Context, url=""):
         actions_data = get_df(spreadsheet_id, "actions")
 
         # clean empty cells
-        actions_data = actions_data.applymap(
+        actions_data = actions_data.map(
             lambda x: x.strip() if isinstance(x, str) else x)
         actions_data['Maxcounts'] = actions_data['Maxcounts'].replace('', 0)
         actions_data['counts'] = actions_data['counts'].replace('', 0)
