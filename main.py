@@ -1253,13 +1253,13 @@ times = [
 
 
 def get_calendar_name() -> str:
-    start_date = datetime.datetime(2026, 4, 4, 0, 0, 0, tzinfo=jkt)
+    start_date = datetime.datetime(2026, 4, 3, 0, 0, 0, tzinfo=jkt)
     now = datetime.datetime.now(jkt)
 
-    delta_days = (now - start_date).days + 1
+    delta_days = (now - start_date).days
 
     date = get_in_game_date(delta_days)
-    chapter_number = (delta_days - 1) // 7 + 1
+    chapter_number = (delta_days) // 7 + 1
     session_number = f"{delta_days:02}"
 
     calendar_name = f"{chapter_number}.{session_number} [{date}]"
@@ -1343,9 +1343,9 @@ def get_in_game_date(irl_day_number):
     ]
 
     total_irl_days_in_year = 56
-    irl_day_in_year = (irl_day_number - 1) % total_irl_days_in_year + 1
+    irl_day_in_year = (irl_day_number) % total_irl_days_in_year
 
-    month_index = (int(math.floor((irl_day_in_year - 1) * 3 / 14))) % len(months)
+    month_index = (int(math.floor((irl_day_in_year-1) * 3 / 14))) % len(months)
     match (irl_day_in_year-1) % 14:
         case 0:
             return f"1 - 6 {months[month_index]}"
