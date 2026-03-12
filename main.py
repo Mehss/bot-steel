@@ -423,7 +423,7 @@ async def add_sheet(ctx: commands.Context, url=""):
         print(actions_data)
 
         # clean empty cells
-        actions_data = actions_data.applymap(
+        actions_data = actions_data.map(
             lambda x: x.strip() if isinstance(x, str) else x)
         actions_data['Cost'] = actions_data['Cost'].replace('', 0, )
         actions_data = actions_data.replace('#REF!', None, )
@@ -432,7 +432,7 @@ async def add_sheet(ctx: commands.Context, url=""):
         ]
         actions_data = actions_data.dropna()
 
-        counters_data = counters_data.applymap(
+        counters_data = counters_data.map(
             lambda x: x.strip() if isinstance(x, str) else x)
         counters_data["Max"] = counters_data['Max'].replace('', 0, )
         counters_data["Count"] = counters_data['Max']
