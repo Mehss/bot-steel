@@ -423,6 +423,7 @@ async def add_sheet(ctx: commands.Context, url=""):
         # clean empty cells
         actions_data = actions_data.applymap(
             lambda x: x.strip() if isinstance(x, str) else x)
+        print(actions_data)
         actions_data['Cost'] = actions_data['Cost'].replace('', 0, )
         actions_data = actions_data.replace('#REF!', None, )
         actions_data = actions_data[
