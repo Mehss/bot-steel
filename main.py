@@ -890,7 +890,9 @@ def get_tier(roll_res: int, is_adv: bool, is_dis: bool):
 
     return tier
 
-
+def roll_replace(match):
+    dice = match.group(0)
+    return str(d20.roll(dice).result)
 def create_action_result_embed(
         possible_action: pd.DataFrame,
         choosen: int,
@@ -919,7 +921,7 @@ def create_action_result_embed(
 
     embed.title = f"{name} uses {action_name}!"
     hit_description = ""
-
+    pattern = r"\b\d*d\d+(?:[+-]\d+)?\b"
     for target in ap.targets:
         meta = ""
         if is_roll:
@@ -946,7 +948,9 @@ def create_action_result_embed(
                     tier_desc = "**T2:** " + tier_2
                 case 3:
                     tier_desc = "**T3:** " + tier_3
+            tier_desc = re.sub(pattern, roll_replace, tier_desc)
             meta += f"{hit_description}:\n{tier_desc}\n"
+                
             if is_crit:
                 meta += f"`⟡ CRITICAL SUCCESS! ⟡`\n"
             
@@ -955,7 +959,6 @@ def create_action_result_embed(
     if is_roll:
         tier_desc = f"- ≤11: {tier_1}\n- 12-16: {tier_2}\n- 17+: {tier_3}"
         embed.add_field(name="⚔️ Tiers", value=tier_desc, inline=False)
-
     power_desc = ""
 
     if trigger:
@@ -969,9 +972,8 @@ def create_action_result_embed(
 
     if power_desc:
         embed.add_field(name="🔰 Description", value=power_desc, inline=False)
-    
     if effect:
-        embed.add_field(name="🌀 Effect", value=effect, inline=False)
+        embed.add_field(name="🌀 Effect", value=re.sub(pattern, roll_replace, effect), inline=False)
     if image:
         embed.set_image(url=image)
     if ap.thumbnail:
@@ -1001,7 +1003,12 @@ def create_counter_list_embed(name: str, df: pd.DataFrame):
     description = ""
     # embed.title = f"{name}'s Actions"
     description += "\n".join(
-        "• " + df["Name"].astype(str) + ": " + df["Count"].astype(str)
+        "• "
+        + df["Name"].astype(str)
+        + ": "
+        + df["Count"].astype(str)
+        + df["Max"].where(df["Max"].notna() & (df["Max"] != 0), "")
+            .apply(lambda x: f"/{int(x)}" if x != "" else "")
     )
 
     embed = discord.Embed()
