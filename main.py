@@ -921,7 +921,7 @@ def create_action_result_embed(
 
     embed.title = f"{name} uses {action_name}!"
     hit_description = ""
-    pattern = r"\b\d*d\d+(?:[+-]\d+)?\b"
+    pattern = r"\b\d*d\d+(?:\s*[+-]\s*(?:\d*d\d+|\d+))*\b"
     for target in ap.targets:
         meta = ""
         if is_roll:
