@@ -1279,8 +1279,8 @@ async def update_calendar():
     except Exception as e:
         print(e, traceback.format_exc())
 
-@bot.command()
-async def update_calendar_manual():
+@bot.command(aliases=["ucm"])
+async def update_calendar_manual(ctx: commands.Context):
     channel_calendar = bot.get_channel(1443642761164095600)
     channel_name = f"📅 {get_calendar_name()}"
     try:
