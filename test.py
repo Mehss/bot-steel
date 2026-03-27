@@ -1,4 +1,6 @@
 import math
+import datetime
+import pytz
 def get_in_game_date(irl_day_number):
     months = [
         "🌻 文月 Futsuki", "🌻 葉月 - Hazuki", "🌻 長月 - Nagatsuki", "🍁 神無月 - Kannazuki", "🍁 霜月 - Shimotsuki",
@@ -9,7 +11,6 @@ def get_in_game_date(irl_day_number):
     irl_day_in_year = (irl_day_number - 1) % total_irl_days_in_year + 1
 
     month_index = (int(math.floor((irl_day_in_year - 1) * 3 / 14))) % len(months)
-    print(month_index)
     match (irl_day_in_year-1) % 14:
         case 0:
             return f"1 {months[month_index]} - 6 {months[month_index]}"
@@ -41,4 +42,20 @@ def get_in_game_date(irl_day_number):
             return f"22 {months[month_index]} - 27 {months[month_index]}"
     raise ValueError("Invalid week number computation.")
 
-print(get_in_game_date(6))
+jkt = pytz.timezone('Asia/Jakarta')
+def get_calendar_name(now) -> str:
+    start_date = datetime.datetime(2026, 4, 3, 0, 0, 0, tzinfo=jkt)
+    # now = datetime.datetime.now(jkt)
+
+    delta_days = (now - start_date).days
+
+    date = get_in_game_date(delta_days)
+    chapter_number = (delta_days) // 7 + 1
+    session_number = f"{delta_days:02}"
+
+    calendar_name = f"{chapter_number}.{session_number} [{date}]"
+    return calendar_name
+
+print(get_calendar_name(datetime.datetime.now(jkt)))
+
+https://discord.com/channels/1443642760060997655/1443642761164095600

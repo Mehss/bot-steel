@@ -2959,4 +2959,5 @@ if __name__ == "__main__":
     downtimeRepo = DowntimeMapRepository()
     monsterRepo = MonsterListRepository()
     monsterMapRepo = MonstersUserMapRepository()
+    update_calendar()
     main()
