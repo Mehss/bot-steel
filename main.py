@@ -1274,12 +1274,19 @@ def get_calendar_name() -> str:
 async def update_calendar():
     channel_calendar = bot.get_channel(1443642761164095600)
     channel_name = f"📅 {get_calendar_name()}"
-    print(channel_name)
     try:
         await channel_calendar.edit(name=channel_name)
     except Exception as e:
         print(e, traceback.format_exc())
 
+@bot.command()
+async def update_calendar_manual():
+    channel_calendar = bot.get_channel(1443642761164095600)
+    channel_name = f"📅 {get_calendar_name()}"
+    try:
+        await channel_calendar.edit(name=channel_name)
+    except Exception as e:
+        print(e, traceback.format_exc())
 
 async def update_ds(guild_id: int):
     try:
@@ -2959,5 +2966,4 @@ if __name__ == "__main__":
     downtimeRepo = DowntimeMapRepository()
     monsterRepo = MonsterListRepository()
     monsterMapRepo = MonstersUserMapRepository()
-    update_calendar()
     main()
