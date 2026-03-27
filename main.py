@@ -1339,14 +1339,14 @@ async def update_ds(guild_id: int):
 @tasks.loop(time=times)
 async def daily_task_run():
     await update_calendar()
-    await update_ds(1343085306571915276)
-    bot_dump_channel = bot.get_channel(1395988000474660935)
-    await bot_dump_channel.send(
-        "Done updating calendar and downtime.")
-    global_group_chat = bot.get_channel(1411751429873598496)
-    await global_group_chat.send(
-        f"```📅 {get_calendar_name()}```"
-    )
+    # await update_ds(1343085306571915276)
+    # bot_dump_channel = bot.get_channel(1395988000474660935)
+    # await bot_dump_channel.send(
+    #     "Done updating calendar and downtime.")
+    # global_group_chat = bot.get_channel(1411751429873598496)
+    # await global_group_chat.send(
+    #     f"```📅 {get_calendar_name()}```"
+    # )
 
 
 def get_in_game_date(irl_day_number):
