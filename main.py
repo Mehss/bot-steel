@@ -1351,7 +1351,7 @@ async def daily_task_run():
 
 def get_in_game_date(irl_day_number):
     months = [
-        "🌻 文月 Futsuki", "🌻 葉月 Hazuki", "🌻 長月 Nagatsuki", "🍁 神無月 Kannazuki", "🍁 霜月 Shimotsuki",
+        "🌻 文月 Fumizuki", "🌻 葉月 Hazuki", "🌻 長月 Nagatsuki", "🍁 神無月 Kannazuki", "🍁 霜月 Shimotsuki",
         "🍁 師走 Shiwasu", "❄️ 睦月 Mutsuki", "❄️ 如月 Kisaragi","❄️ 弥生 Yayoi" , "🌸 卯月 Uzuki", "🌸 皐月 Satsuki", "🌸 水無月 Minazuki", 
     ]
 
