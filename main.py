@@ -1254,7 +1254,7 @@ def add_border_template(url: str, template_path: str, name=""):
 jkt = pytz.timezone('Asia/Jakarta')
 utc = datetime.timezone.utc
 times = [
-    datetime.time(hour=1, tzinfo=jkt)
+    datetime.time(hour=0, minute=0, second=10, tzinfo=jkt)
 ]
 
 
@@ -1265,7 +1265,7 @@ def get_calendar_name() -> str:
     delta_days = (now - start_date).days
 
     date = get_in_game_date(delta_days)
-    chapter_number = (delta_days) // 7 + 1
+    chapter_number = (delta_days-1) // 7 + 1
     session_number = f"{delta_days:02}"
 
     calendar_name = f"{chapter_number}.{session_number} [{date}]"
