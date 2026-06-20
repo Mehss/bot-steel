@@ -56,6 +56,4 @@ def get_calendar_name(now) -> str:
     calendar_name = f"{chapter_number}.{session_number} [{date}]"
     return calendar_name
 
-print(get_calendar_name(datetime.datetime.now(jkt)))
-
-https://discord.com/channels/1443642760060997655/1443642761164095600
+print(get_calendar_name(datetime.datetime(2026, 5, 14, 0, 0, 0, tzinfo=jkt)))
