@@ -1258,21 +1258,36 @@ times = [
 ]
 
 
+# def get_calendar_name() -> str:
+#     start_date = datetime.datetime(2026, 4, 3, 0, 0, 0, tzinfo=jkt)
+#     now = datetime.datetime.now(jkt)
+
+#     delta_days = (now - start_date).days
+
+#     date = get_in_game_date(delta_days)
+#     chapter_number = (delta_days-1) // 7 + 1
+#     session_number = f"{delta_days:02}"
+
+#     calendar_name = f"{chapter_number}.{session_number} [{date}]"
+#     return calendar_name
+
 def get_calendar_name() -> str:
-    start_date = datetime.datetime(2026, 4, 3, 0, 0, 0, tzinfo=jkt)
+    jkt = pytz.timezone('Asia/Jakarta')
     now = datetime.datetime.now(jkt)
+    irl_start = datetime.datetime(2026, 7, 10, 0, 0, 0, tzinfo=jkt)
+    in_game_start = datetime.datetime(2000, 3, 1, tzinfo=jkt)
+    delta_days = (now - irl_start).days
+    range_start = in_game_start + datetime.timedelta(days=delta_days * 7)
+    range_end = range_start + datetime.timedelta(days=6)
 
-    delta_days = (now - start_date).days
-
-    date = get_in_game_date(delta_days)
-    chapter_number = (delta_days-1) // 7 + 1
+    date = f"{range_start.day} {range_start.strftime('%B')} - {range_end.day} {range_end.strftime('%B')}"
+    chapter_number = delta_days // 7 + 1
     session_number = f"{delta_days:02}"
 
-    calendar_name = f"{chapter_number}.{session_number} [{date}]"
-    return calendar_name
+    return f"{chapter_number}.{session_number} [{date}]"
 
 async def update_calendar():
-    channel_calendar = bot.get_channel(1443642761164095600)
+    channel_calendar = bot.get_channel(1515924524288315494)
     channel_name = f"📅 {get_calendar_name()}"
     try:
         await channel_calendar.edit(name=channel_name)
@@ -1281,7 +1296,7 @@ async def update_calendar():
 
 @bot.command(aliases=["ucm"])
 async def update_calendar_manual(ctx: commands.Context):
-    channel_calendar = bot.get_channel(1443642761164095600)
+    channel_calendar = bot.get_channel(1515924524288315494)
     channel_name = f"📅 {get_calendar_name()}"
     try:
         await channel_calendar.edit(name=channel_name)
@@ -1336,9 +1351,9 @@ async def update_ds(guild_id: int):
     return
 
 
-# @tasks.loop(time=times)
-# async def daily_task_run():
-    # await update_calendar()
+@tasks.loop(time=times)
+async def daily_task_run():
+    await update_calendar()
     # await update_ds(1343085306571915276)
     # bot_dump_channel = bot.get_channel(1395988000474660935)
     # await bot_dump_channel.send(
