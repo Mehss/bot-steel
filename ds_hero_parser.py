@@ -519,6 +519,7 @@ def _build_data_df(hero, cls, level, characteristics):
 
     rows = [
         {"category": "Special", "field_name": "Title",       "value": name,        "is_rollable": "FALSE"},
+        {"category": "Special", "field_name": "Name",        "value": name,        "is_rollable": "FALSE"},
         {"category": "Special", "field_name": "Description", "value": description, "is_rollable": "FALSE"},
         {"category": "Special", "field_name": "Thumbnail",   "value": picture,     "is_rollable": "FALSE"},
         {"category": "Special", "field_name": "Image",       "value": "",          "is_rollable": "FALSE"},
