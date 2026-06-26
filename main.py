@@ -28,6 +28,7 @@ from repository import DowntimeMapRepository
 from repository import MonsterListRepository
 from repository import MonstersUserMapRepository
 from dnd_xml_parser import read_character_file, character_to_excel
+from ds_hero_parser import parse_ds_hero
 import constant
 from pagination import Paginator
 from pydantic import BaseModel
@@ -302,6 +303,7 @@ async def help(ctx):
     desc += "**Reseting Counters**\n"
     desc += "- Encounter Ends: `;;reset`\n"
     desc += "- Respite: `;;respite`\n"
+    desc += "- Parse (BETA): `;;Parse <also upload your .ds-hero>`\n"
     embed.description = desc
 
     await ctx.send(embed=embed)
@@ -1141,8 +1143,10 @@ def create_embed(data_dict: dict) -> discord.Embed:
         if category == "Special":
             embed.title = fields['Title']
             embed.description = fields['Description']
-            embed.set_thumbnail(url=fields['Thumbnail'])
-            embed.set_image(url=fields['Image'])
+            if fields.get('Thumbnail'):
+                embed.set_thumbnail(url=fields['Thumbnail'])
+            if fields.get('Image'):
+                embed.set_image(url=fields['Image'])
             continue
         if category == "CVAR":
             continue
@@ -2945,6 +2949,40 @@ async def cb_generate(ctx: commands.Context):
     except Exception as e:
         print(e, traceback.format_exc())
         await ctx.send("Error loading cbloader save file.")
+
+
+@bot.command(aliases=["parse"])
+async def add_hero_sheet(ctx: commands.Context):
+    attachment = ctx.message.attachments[0] if ctx.message.attachments else None
+    if attachment is None:
+        await ctx.send("Please attach a .ds-hero file.")
+        return
+    try:
+        file_bytes = await attachment.read()
+        async with ctx.typing():
+            name, actions_df, counters_df, data_df = parse_ds_hero(file_bytes)
+            existing = charaRepo.get_character(ctx.guild.id, ctx.author.id)
+            if existing is None:
+                data_json = data_df.to_json()
+                sheet_url = ""
+            else:
+                data_json = existing[2]
+                sheet_url = existing[5]
+            charaRepo.set_character(
+                ctx.guild.id,
+                ctx.author.id,
+                name,
+                data_json,
+                actions_df.to_json(),
+                counters_df.to_json(),
+                sheet_url=sheet_url,
+            )
+            data_dict = create_data_dict(pd.read_json(io.StringIO(data_json)))
+            embed = create_embed(data_dict)
+            await ctx.send(f"Abilities and resources updated from DS Hero file.", embed=embed)
+    except Exception as e:
+        print(e, traceback.format_exc())
+        await ctx.send("Error loading .ds-hero file.")
 
 
 async def handle_check_monster(

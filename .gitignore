@@ -183,3 +183,6 @@ credentials.json
 _chat.py
 
 temp/*.png
+
+forgesteel-ref/*
+*.ds-hero
