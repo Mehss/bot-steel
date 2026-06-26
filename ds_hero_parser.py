@@ -61,11 +61,11 @@ def parse_ds_hero(data: bytes):
         for c in cls.get("characteristics", [])
     }
 
-    abilities = _collect_abilities(cls, level)
-    melee_bonus, ranged_bonus = _collect_kit_bonuses(cls, level)
+    abilities = _collect_abilities(cls, level) + _free_strike_abilities()
+    kit_bonuses = _collect_kit_bonuses(cls, level)
     ability_dmg_bonuses = _collect_ability_damage_bonuses(cls, level) + _collect_inventory_ability_damage_bonuses(hero, level)
     resource_name = _heroic_resource_name(cls, level)
-    actions_df = _build_actions_df(abilities, characteristics, melee_bonus, ranged_bonus, ability_dmg_bonuses, resource_name)
+    actions_df = _build_actions_df(abilities, characteristics, kit_bonuses, ability_dmg_bonuses, resource_name)
     counters_df = _build_counters_df(hero, cls, level)
     data_df = _build_data_df(hero, cls, level, characteristics)
     name = hero.get("name", "Unknown")
@@ -163,6 +163,37 @@ def _collect_ability_damage_bonuses(cls, level):
     return bonuses
 
 
+def _free_strike_abilities():
+    def _roll_section(t1, t2, t3):
+        return {"type": "roll", "roll": {
+            "characteristic": ["Might", "Agility"],
+            "bonus": 0,
+            "tier1": t1, "tier2": t2, "tier3": t3,
+        }}
+    return [
+        {
+            "name": "Free Strike (Melee)",
+            "description": "",
+            "type": {"usage": "Free Strike", "trigger": ""},
+            "cost": 0,
+            "distance": [{"type": "Melee", "value": 1}],
+            "target": "One creature or object",
+            "keywords": ["Charge", "Melee", "Strike", "Weapon"],
+            "sections": [_roll_section("2 + M or A damage", "5 + M or A damage", "7 + M or A damage")],
+        },
+        {
+            "name": "Free Strike (Ranged)",
+            "description": "",
+            "type": {"usage": "Free Strike", "trigger": ""},
+            "cost": 0,
+            "distance": [{"type": "Ranged", "value": 5}],
+            "target": "One creature or object",
+            "keywords": ["Ranged", "Strike", "Weapon"],
+            "sections": [_roll_section("2 + M or A damage", "4 + M or A damage", "6 + M or A damage")],
+        },
+    ]
+
+
 def _collect_inventory_ability_damage_bonuses(hero, level):
     """
     Return ability damage bonus dicts from inventory items.
@@ -210,11 +241,10 @@ def _collect_inventory_ability_damage_bonuses(hero, level):
 
 def _collect_kit_bonuses(cls, level):
     """
-    Return (melee_per_kit, ranged_per_kit) as lists of (t1, t2, t3) tuples, one entry per kit.
-    Kits with no bonus for that damage type are excluded.
+    Return a list of (melee_tuple, ranged_tuple) per kit, where each tuple is (t1, t2, t3).
+    Kits with no damage bonus at all are excluded.
     """
-    melee = []
-    ranged = []
+    kits = []
     for level_data in cls.get("featuresByLevel", []):
         if level_data["level"] > level:
             break
@@ -223,12 +253,12 @@ def _collect_kit_bonuses(cls, level):
                 continue
             for kit in feature["data"].get("selected", []):
                 md = kit.get("meleeDamage")
-                if md and any(md.get(f"tier{i}", 0) for i in (1, 2, 3)):
-                    melee.append((md.get("tier1", 0), md.get("tier2", 0), md.get("tier3", 0)))
                 rd = kit.get("rangedDamage")
-                if rd and any(rd.get(f"tier{i}", 0) for i in (1, 2, 3)):
-                    ranged.append((rd.get("tier1", 0), rd.get("tier2", 0), rd.get("tier3", 0)))
-    return melee, ranged
+                m = (md.get("tier1", 0), md.get("tier2", 0), md.get("tier3", 0)) if md else (0, 0, 0)
+                r = (rd.get("tier1", 0), rd.get("tier2", 0), rd.get("tier3", 0)) if rd else (0, 0, 0)
+                if any(m) or any(r):
+                    kits.append((m, r))
+    return kits
 
 
 def apply_tier_bonuses(tier_str, flat_bonus, kit_bonuses, tier_idx):
@@ -269,7 +299,7 @@ def _format_distance(distances):
     return " / ".join(parts)
 
 
-def _ability_to_row(ability, characteristics, melee_bonus, ranged_bonus, ability_dmg_bonuses, resource_name):
+def _ability_to_row(ability, characteristics, kit_bonuses, ability_dmg_bonuses, resource_name):
     name = ability.get("name", "")
     description = ability.get("description", "")
     action_type = ability.get("type", {})
@@ -317,11 +347,16 @@ def _ability_to_row(ability, characteristics, melee_bonus, ranged_bonus, ability
     # Pick per-kit bonus list that applies to this ability
     if is_weapon_strike and (is_melee or is_ranged):
         if is_melee and is_ranged:
-            kit_per_kit = melee_bonus if melee_bonus else ranged_bonus
+            # take the higher of melee vs ranged per tier for each kit
+            kit_per_kit = [
+                tuple(max(m[i], r[i]) for i in range(3))
+                for m, r in kit_bonuses
+                if any(m) or any(r)
+            ]
         elif is_melee:
-            kit_per_kit = melee_bonus
+            kit_per_kit = [m for m, _ in kit_bonuses if any(m)]
         else:
-            kit_per_kit = ranged_bonus
+            kit_per_kit = [r for _, r in kit_bonuses if any(r)]
     else:
         kit_per_kit = []
 
@@ -359,8 +394,8 @@ def _ability_to_row(ability, characteristics, melee_bonus, ranged_bonus, ability
     }
 
 
-def _build_actions_df(abilities, characteristics, melee_bonus, ranged_bonus, ability_dmg_bonuses, resource_name):
-    rows = [_ability_to_row(a, characteristics, melee_bonus, ranged_bonus, ability_dmg_bonuses, resource_name) for a in abilities]
+def _build_actions_df(abilities, characteristics, kit_bonuses, ability_dmg_bonuses, resource_name):
+    rows = [_ability_to_row(a, characteristics, kit_bonuses, ability_dmg_bonuses, resource_name) for a in abilities]
     if not rows:
         return pd.DataFrame(columns=[
             "Name", "Action", "Cost", "ShortDesc", "Effect", "IsRoll",
