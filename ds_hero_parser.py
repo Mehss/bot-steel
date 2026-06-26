@@ -63,7 +63,7 @@ def parse_ds_hero(data: bytes):
 
     abilities = _collect_abilities(cls, level)
     melee_bonus, ranged_bonus = _collect_kit_bonuses(cls, level)
-    ability_dmg_bonuses = _collect_ability_damage_bonuses(cls, level) + _collect_inventory_ability_damage_bonuses(hero)
+    ability_dmg_bonuses = _collect_ability_damage_bonuses(cls, level) + _collect_inventory_ability_damage_bonuses(hero, level)
     resource_name = _heroic_resource_name(cls, level)
     actions_df = _build_actions_df(abilities, characteristics, melee_bonus, ranged_bonus, ability_dmg_bonuses, resource_name)
     counters_df = _build_counters_df(hero, cls, level)
@@ -163,12 +163,14 @@ def _collect_ability_damage_bonuses(cls, level):
     return bonuses
 
 
-def _collect_inventory_ability_damage_bonuses(hero):
+def _collect_inventory_ability_damage_bonuses(hero, level):
     """
-    Return ability damage bonus dicts from inventory items:
-    - Imbued Weapon: +1 Weapon per imbuement tier (level 1/5/9)
-    - Imbued Implement: +1 Magic and +1 Psionic per imbuement tier
+    Return ability damage bonus dicts from inventory items.
+    - Imbued Weapon: +1 Weapon per imbuement tier present (level 1/5/9)
+    - Imbued Implement: +1 Magic and +1 Psionic per imbuement tier present
     - Any imbuement.feature of type Ability Damage
+    - Leveled Weapon / Leveled Implement / Leveled Item: Ability Damage features
+      from featuresByLevel up to hero level
     """
     bonuses = []
     for item in hero.get("state", {}).get("inventory", []):
@@ -186,12 +188,22 @@ def _collect_inventory_ability_damage_bonuses(hero):
                     bonuses.append({"keywords": ["Magic"], "value": 1})
                     bonuses.append({"keywords": ["Psionic"], "value": 1})
 
-        # Also capture any explicit Ability Damage features on imbuements
+        # Explicit Ability Damage features on imbuements (e.g. Enchantment of Destruction)
         for imb in item.get("imbuements", []):
             feat = imb.get("feature") or {}
             if feat.get("type") == "Ability Damage":
                 d = feat.get("data") or {}
                 bonuses.append({"keywords": d.get("keywords", []), "value": d.get("value", 0)})
+
+        # Leveled Weapon / Implement / Item: Ability Damage features in featuresByLevel
+        if itype in ("Leveled Weapon", "Leveled Implement", "Leveled Item"):
+            for lvl_entry in item.get("featuresByLevel", []):
+                if lvl_entry["level"] > level:
+                    break
+                for feat in lvl_entry.get("features", []):
+                    if feat.get("type") == "Ability Damage":
+                        d = feat.get("data") or {}
+                        bonuses.append({"keywords": d.get("keywords", []), "value": d.get("value", 0)})
 
     return bonuses
 
