@@ -32,11 +32,13 @@ bytes
        ├─ cls["characteristics"]   → {Might: 2, Agility: -1, …}
        │
        ├─ _collect_abilities(cls, level)              → abilities[]
-       ├─ _collect_kit_bonuses(cls, level)            → melee_per_kit, ranged_per_kit
+       │    + _free_strike_abilities()                → appended to abilities[]
+       ├─ _collect_kit_bonuses(cls, level)            → kit_bonuses[]
        ├─ _build_actions_df(abilities, chars, …)      → actions_df
-       └─ _build_counters_df(hero, cls, level)        → counters_df
+       ├─ _build_counters_df(hero, cls, level)        → counters_df
+       └─ _build_data_df(hero, cls, level, chars)     → data_df
 
-Returns: (name, actions_df, counters_df)
+Returns: (name, actions_df, counters_df, data_df)
 ```
 
 ---
@@ -65,19 +67,45 @@ After the loop, deferred IDs are resolved against `ability_pool` and appended.
 
 ---
 
+### Free strike abilities — `_free_strike_abilities`
+
+Returns two hardcoded ability dicts appended to every hero's ability list:
+
+| Name | Keywords | Range | T1 | T2 | T3 |
+|---|---|---|---|---|---|
+| Free Strike (Melee) | Charge, Melee, Strike, Weapon | Melee 1 | 2 + M or A damage | 5 + M or A damage | 7 + M or A damage |
+| Free Strike (Ranged) | Ranged, Strike, Weapon | Ranged 5 | 2 + M or A damage | 4 + M or A damage | 6 + M or A damage |
+
+Both use `Action = "Free Strike"`, `Cost = ""`, roll on `Might` or `Agility`. Kit melee/ranged damage bonuses apply normally (Melee strike gets melee kit bonus, Ranged gets ranged kit bonus).
+
+---
+
 ### Kit damage bonuses — `_collect_kit_bonuses`
 
-Scans `featuresByLevel` up to `level` for `Kit` features. For each selected kit, collects `meleeDamage` and `rangedDamage` as `(tier1, tier2, tier3)` tuples — one entry per kit that has a non-zero bonus.
+Scans `featuresByLevel` up to `level` for `Kit` features. For each selected kit, collects `meleeDamage` and `rangedDamage` as `(tier1, tier2, tier3)` tuples and stores them together.
 
-Returns `(melee_per_kit, ranged_per_kit)` as lists of tuples.
+Returns a list of `(melee_tuple, ranged_tuple)` pairs, one per kit with any non-zero bonus. Kits with no damage bonus at all are excluded.
 
-**Applied in `_ability_to_row`:** if the ability has keywords `Weapon` + `Strike`, the relevant list is selected (melee, ranged, or the higher of both for dual-type abilities). `_apply_kit_bonuses` then replaces the base damage number in each tier string with per-kit totals:
+**Applied in `_ability_to_row`:** if the ability has keywords `Weapon` + `Strike`, the per-kit list is filtered by ability type:
 
-| Tier string after `_sub_chars` | melee_per_kit | Result |
+| Ability keywords | `KitDmgBonus` stored |
+|---|---|
+| Melee only | `[[t1,t2,t3], …]` — one entry per kit with any melee bonus |
+| Ranged only | `[[t1,t2,t3], …]` — one entry per kit with any ranged bonus |
+| Melee + Ranged | `{"melee": [[…], …], "ranged": [[…], …]}` — separate pools |
+| Neither | `[]` |
+
+`apply_tier_bonuses` applies these at display time:
+
+- **List** (melee-only / ranged-only): replaces the leading damage number with per-kit totals slash-joined.
+- **Dict** (melee+ranged): applies melee pool and ranged pool separately, then combines as `"M melee / R ranged damage"`. If both sides produce the same result, the label is omitted.
+
+| Tier string | `KitDmgBonus` | Result |
 |---|---|---|
-| `"5 damage"` | `[(2,2,2), (1,1,1)]` | `"7/6 damage"` |
-| `"5 damage; vertical pull 1"` | `[(2,2,2), (1,1,1)]` | `"7/6 damage; vertical pull 1"` |
-| `"Each target gains 1 surge."` | `[(2,2,2)]` | `"Each target gains 1 surge."` (no match) |
+| `"5 damage"` | `[[2,2,2],[1,1,1]]` | `"7/6 damage"` |
+| `"5 damage; pull 1"` | `[[2,2,2],[1,1,1]]` | `"7/6 damage; pull 1"` |
+| `"7 damage; …"` | `{"melee":[[2,2,2],[1,1,1]],"ranged":[]}` | `"9/8 melee / 7 ranged damage; …"` |
+| `"Each target gains 1 surge."` | `[[2,2,2]]` | `"Each target gains 1 surge."` (no match) |
 
 ---
 
@@ -176,6 +204,20 @@ Example — Haruhiro Aizou (Level 2 Tactician, Shining Armor + Whirlwind):
 
 ---
 
+### Data — `_build_data_df`
+
+Builds a generic key-value DataFrame for the character sheet's static fields and stats.
+
+| category | field_name | value |
+|---|---|---|
+| `Special` | Title, Name, Description, Thumbnail, Image | Hero name / ancestry+class description / picture URL |
+| `STAT` | Might, Agility, Reason, Intuition, Presence | Numeric characteristic values (rollable) |
+| `SKILL` | Each selected skill name | `""` (non-rollable) |
+
+Skills are collected from class feature choices, career, ancestry, and culture sections.
+
+---
+
 ## What Gets Parsed
 
 | Source | Output |
@@ -201,15 +243,26 @@ Example — Haruhiro Aizou (Level 2 Tactician, Shining Armor + Whirlwind):
 |---|---|
 | Name | `ability.name` |
 | Action | `ability.type.usage` |
-| Cost | `"0"` for signature / `"N Focus"` for heroic |
+| Cost | `""` for signature/free / `"N Focus"` for heroic |
 | ShortDesc | `ability.description` |
 | IsRoll | `"TRUE"` if ability has a roll section |
 | Bonus | Max characteristic value + flat bonus (number string) |
-| T1 / T2 / T3 | Tier strings after char substitution and kit damage |
+| T1 / T2 / T3 | Tier strings after char substitution (kit bonuses applied at display time) |
 | Effect | Concatenated text + field sections |
 | Target | `ability.target` |
 | Range | Formatted from `ability.distance[]` |
 | Trigger | `ability.type.trigger` |
+| FlatDmgBonus | Sum of matching `Ability Damage` feature bonuses |
+| KitDmgBonus | JSON array of `[t1, t2, t3]` per-kit bonus lists |
+
+### `data_df` — used by `;;cb_generate`
+
+| column | values |
+|---|---|
+| category | `"Special"`, `"STAT"`, `"SKILL"` |
+| field_name | Field or stat name |
+| value | Stat value or string |
+| is_rollable | `"TRUE"` for stats, `"FALSE"` otherwise |
 
 ### `counters_df` — used by `;;r`
 

@@ -261,22 +261,61 @@ def _collect_kit_bonuses(cls, level):
     return kits
 
 
+def _filter_dominated_kits(kits):
+    """Remove any kit dominated by another — i.e. another kit is >= at all tiers and > at least one."""
+    result = []
+    for i, a in enumerate(kits):
+        if not any(
+            all(b[t] >= a[t] for t in range(3)) and any(b[t] > a[t] for t in range(3))
+            for j, b in enumerate(kits) if j != i
+        ):
+            result.append(a)
+    return result
+
+
+def _apply_kit_list(tier_str, flat_bonus, kits, tier_idx):
+    """Apply flat bonus and a single list of per-kit (t1,t2,t3) tuples."""
+    kits = _filter_dominated_kits(kits)
+
+    def _replace(match):
+        base = int(match.group(1)) + flat_bonus
+        bonuses = [b[tier_idx] for b in kits]
+        if any(bonuses):
+            unique = list(dict.fromkeys(bonuses))
+            return "/".join(str(base + v) for v in unique) + match.group(2)
+        return str(base) + match.group(2)
+
+    if not flat_bonus and not any(b[tier_idx] for b in kits):
+        return tier_str
+    return re.sub(r'^(\d+)(.*?\bdamage\b)', _replace, tier_str, count=1)
+
+
 def apply_tier_bonuses(tier_str, flat_bonus, kit_bonuses, tier_idx):
     """Apply flat and per-kit damage bonuses to a tier string at display time.
 
-    kit_bonuses is a list of (t1, t2, t3) tuples, one per kit.
-    '3 + M damage', flat=1, kits=[(2,2,2),(1,1,1)], idx=0 → '7/6 + M damage'
-    """
-    def _replace(match):
-        base = int(match.group(1)) + flat_bonus
-        vals = [b[tier_idx] for b in kit_bonuses if b[tier_idx]]
-        if vals:
-            return "/".join(str(base + v) for v in vals) + match.group(2)
-        return str(base) + match.group(2)
+    kit_bonuses is either:
+      - a list of (t1, t2, t3) tuples (melee-only or ranged-only ability)
+      - a dict {"melee": [...], "ranged": [...]} (melee+ranged ability)
 
-    if not flat_bonus and not any(b[tier_idx] for b in kit_bonuses):
-        return tier_str
-    return re.sub(r'^(\d+)(.*?\bdamage\b)', _replace, tier_str, count=1)
+    Dict form produces "M melee / R ranged damage" when the two sides differ.
+    """
+    if isinstance(kit_bonuses, dict):
+        melee_kits = kit_bonuses.get("melee", [])
+        ranged_kits = kit_bonuses.get("ranged", [])
+        m_str = _apply_kit_list(tier_str, flat_bonus, melee_kits, tier_idx)
+        r_str = _apply_kit_list(tier_str, flat_bonus, ranged_kits, tier_idx)
+        if m_str == r_str:
+            return m_str
+        def _extract(s):
+            m = re.match(r'^([\d/]+)(.*?\bdamage\b)(.*)', s, re.DOTALL)
+            return (m.group(1), m.group(3)) if m else (None, "")
+        m_nums, suffix = _extract(m_str)
+        r_nums, _ = _extract(r_str)
+        if m_nums and r_nums:
+            return f"{m_nums} melee / {r_nums} ranged damage{suffix}"
+        return m_str
+
+    return _apply_kit_list(tier_str, flat_bonus, kit_bonuses, tier_idx)
 
 
 # ---------------------------------------------------------------------------
@@ -347,12 +386,10 @@ def _ability_to_row(ability, characteristics, kit_bonuses, ability_dmg_bonuses, 
     # Pick per-kit bonus list that applies to this ability
     if is_weapon_strike and (is_melee or is_ranged):
         if is_melee and is_ranged:
-            # take the higher of melee vs ranged per tier for each kit
-            kit_per_kit = [
-                tuple(max(m[i], r[i]) for i in range(3))
-                for m, r in kit_bonuses
-                if any(m) or any(r)
-            ]
+            kit_per_kit = {
+                "melee": [m for m, _ in kit_bonuses if any(m)],
+                "ranged": [r for _, r in kit_bonuses if any(r)],
+            }
         elif is_melee:
             kit_per_kit = [m for m, _ in kit_bonuses if any(m)]
         else:
