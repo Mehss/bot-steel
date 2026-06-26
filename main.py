@@ -584,10 +584,11 @@ async def action(ctx: commands.Context, *, args=None):
             return
         else:
             args = translate_cvar(args, data)
-            embed = await handle_action(args, actions, ctx, data, resources, sheet_id)
-        if embed is None:
+            embeds = await handle_action(args, actions, ctx, data, resources, sheet_id)
+        if embeds is None:
             return
-        await ctx.send(embed=embed)
+        view = Paginator(ctx.author, embeds) if len(embeds) > 1 else None
+        await ctx.send(embed=embeds[0], view=view)
     except Exception as e:
         print(e, traceback.format_exc())
         await ctx.send("Error. Please check input again. " + str(e))
@@ -663,7 +664,7 @@ async def handle_action(
             return None
     else:
         choosen = 0
-    embed = create_action_result_embed(possible_action, choosen, name, ap)
+    embeds = create_action_result_embed(possible_action, choosen, name, ap)
     cost = possible_action['Cost'].iloc[choosen]
     cost = "" if pd.isna(cost) else str(cost)
     if cost and cost.split(' ')[0] != '0':
@@ -674,10 +675,10 @@ async def handle_action(
         hr_count = hr_count + cost_numeric
         resources.loc[3, "Count"] = hr_count
         resource_str = str(hr_count) + " (" + format_bonus(str(cost_numeric)) + ")"
-        embed.add_field(name="⚡ " + hr_name, value=resource_str)
+        embeds[0].add_field(name="⚡ " + hr_name, value=resource_str)
         charaRepo.update_character(sheet_id, None, None, resources.to_json())
 
-    return embed
+    return embeds
 
 
 def parse_command(message: str) -> ActionParam:
@@ -896,24 +897,56 @@ def get_tier(roll_res: int, is_adv: bool, is_dis: bool):
 def roll_replace(match):
     dice = match.group(0)
     return str(d20.roll(dice).result)
+def _split_effect(text: str, chunk_size: int = 500) -> list[str]:
+    chunks = []
+    while len(text) > chunk_size:
+        split_at = text.rfind('\n', 0, chunk_size)
+        if split_at == -1:
+            split_at = chunk_size
+        chunks.append(text[:split_at].strip())
+        text = text[split_at:].strip()
+    if text:
+        chunks.append(text)
+    return chunks
+
+
+def _add_effect_pages(
+        embeds: list,
+        chunks: list[str],
+        title: str,
+        embed_description: str,
+        image: str,
+        thumbnail: str,
+        start_idx: int = 0):
+    for i, chunk in enumerate(chunks):
+        page = discord.Embed()
+        page.title = title
+        page.description = embed_description
+        header = "🌀 Effect" if i == 0 else "🌀 Effect (cont.)"
+        page.add_field(name=header, value=chunk, inline=False)
+        if image:
+            page.set_image(url=image)
+        if thumbnail:
+            page.set_thumbnail(url=thumbnail)
+        embeds.append(page)
+
+
 def create_action_result_embed(
         possible_action: pd.DataFrame,
         choosen: int,
         name: str,
-        ap: ActionParam):
-    embed = discord.Embed()
+        ap: ActionParam) -> list[discord.Embed]:
     action_name = possible_action['Name'].iloc[choosen]
     action_type = possible_action['Action'].iloc[choosen]
     embed_description = f"-# `{action_type}`"
-    # flavor = str(possible_action['Flavor'].iloc[choosen])
     effect = str(possible_action['Effect'].iloc[choosen])
     bonus = str(possible_action['Bonus'].iloc[choosen])
-    is_roll = str(possible_action['IsRoll'].iloc[choosen])
+    is_roll = str(possible_action['IsRoll'].iloc[choosen]) == "TRUE"
     image = str(possible_action['Image'].iloc[choosen])
     cost = possible_action['Cost'].iloc[choosen]
     cost = "" if pd.isna(cost) else str(cost)
     tgt = str(possible_action['Target'].iloc[choosen])
-    range = str(possible_action['Range'].iloc[choosen])
+    range_str = str(possible_action['Range'].iloc[choosen])
     trigger = str(possible_action['Trigger'].iloc[choosen])
     tier_1 = str(possible_action['T1'].iloc[choosen])
     tier_2 = str(possible_action['T2'].iloc[choosen])
@@ -927,71 +960,76 @@ def create_action_result_embed(
         tier_3 = apply_tier_bonuses(tier_3, flat_dmg, kit_dmg, 2)
     if 'SmallText' in possible_action and possible_action['SmallText'].iloc[choosen]:
         embed_description += "\n" + str(possible_action['SmallText'].iloc[choosen])
-    meta = ""
-    is_crit = False
 
-    embed.title = f"{name} uses {action_name}!"
-    hit_description = ""
+    title = f"{name} uses {action_name}!"
     pattern = r"\b\d*d\d+(?:\s*[+-]\s*(?:\d*d\d+|\d+))*\b"
-    for target in ap.targets:
-        meta = ""
-        if is_roll:
+    thumbnail = ap.thumbnail or ""
+    effect_rendered = re.sub(pattern, roll_replace, effect) if effect else ""
+    effect_chunks = _split_effect(effect_rendered) if effect_rendered else []
+
+    power_desc = ""
+    if trigger:
+        power_desc += f"**Trigger:** {trigger}\n"
+    if cost and cost != "0":
+        power_desc += f"**Cost:** {cost}\n"
+    if range_str:
+        power_desc += f"**Range:** {range_str}\n"
+    if tgt:
+        power_desc += f"**Target:** {tgt}\n"
+
+    embed = discord.Embed()
+    embed.title = title
+    embed.description = embed_description
+    if image:
+        embed.set_image(url=image)
+    if thumbnail:
+        embed.set_thumbnail(url=thumbnail)
+    embeds = [embed]
+
+    if is_roll:
+        hit_description = ""
+        is_crit = False
+        for target in ap.targets:
             to_hit = "2d10"
-            bonus_string = ""
-            if bonus:
-                bonus_string += format_bonus(bonus)
+            bonus_string = format_bonus(bonus) if bonus else ""
             bonus_string += target.d20_bonus
-            expression = to_hit + bonus_string
-            expression = expression_str(expression, ap.is_halved)
+            expression = expression_str(to_hit + bonus_string, ap.is_halved)
             hit_result = d20.roll(expression)
             hit_description += hit_result.result
             if target.is_adv: hit_description += " With Double Edge"
             if target.is_dis: hit_description += " With Double Bane"
             tier = get_tier(hit_result.total, target.is_adv, target.is_dis)
-            if d20.roll(str(hit_result.total)+"- ("+bonus_string+")").total > 18:
+            if d20.roll(str(hit_result.total) + "- (" + bonus_string + ")").total > 18:
                 is_crit = True
-
-            tier_desc = ""
             match tier:
-                case 1:
-                    tier_desc = "**T1:** " + tier_1
-                case 2:
-                    tier_desc = "**T2:** " + tier_2
-                case 3:
-                    tier_desc = "**T3:** " + tier_3
+                case 1: tier_desc = "**T1:** " + tier_1
+                case 2: tier_desc = "**T2:** " + tier_2
+                case 3: tier_desc = "**T3:** " + tier_3
             tier_desc = re.sub(pattern, roll_replace, tier_desc)
-            meta += f"{hit_description}:\n{tier_desc}\n"
-                
+            meta = f"{hit_description}:\n{tier_desc}\n"
             if is_crit:
-                meta += f"`⟡ CRITICAL SUCCESS! ⟡`\n"
-            
-            if to_hit:
-                embed.add_field(name=target.name, value=meta, inline=False)
-    if is_roll:
-        tier_desc = f"- ≤11: {tier_1}\n- 12-16: {tier_2}\n- 17+: {tier_3}"
-        embed.add_field(name="⚔️ Tiers", value=tier_desc, inline=False)
-    power_desc = ""
+                meta += "`⟡ CRITICAL SUCCESS! ⟡`\n"
+            embed.add_field(name=target.name, value=meta, inline=False)
 
-    if trigger:
-        power_desc += f"**Trigger:** {trigger}\n"
-    if cost and not cost == "0":
-        power_desc += f"**Cost:** {cost}\n"
-    if range:
-        power_desc += f"**Range:** {range}\n"
-    if tgt:
-        power_desc += f"**Target:** {tgt}\n"
+        embed.add_field(
+            name="⚔️ Tiers",
+            value=f"- ≤11: {tier_1}\n- 12-16: {tier_2}\n- 17+: {tier_3}",
+            inline=False)
+        if power_desc:
+            embed.add_field(name="🔰 Description", value=power_desc, inline=False)
+        if effect_chunks and len(effect_rendered) <= 500:
+            embed.add_field(name="🌀 Effect", value=effect_chunks[0], inline=False)
+        elif effect_chunks:
+            _add_effect_pages(embeds, effect_chunks, title, embed_description, image, thumbnail)
+    else:
+        if power_desc:
+            embed.add_field(name="🔰 Description", value=power_desc, inline=False)
+        if effect_chunks:
+            embed.add_field(name="🌀 Effect", value=effect_chunks[0], inline=False)
+            if len(effect_chunks) > 1:
+                _add_effect_pages(embeds, effect_chunks[1:], title, embed_description, image, thumbnail)
 
-    if power_desc:
-        embed.add_field(name="🔰 Description", value=power_desc, inline=False)
-    if effect:
-        embed.add_field(name="🌀 Effect", value=re.sub(pattern, roll_replace, effect), inline=False)
-    if image:
-        embed.set_image(url=image)
-    if ap.thumbnail:
-        embed.set_thumbnail(url=ap.thumbnail)
-
-    embed.description = embed_description
-    return embed
+    return embeds
 
 @bot.command(aliases=["r"])
 async def counter(ctx: commands.Context,  *, args=None):
@@ -2336,10 +2374,11 @@ async def monster_action(ctx: commands.Context, *, args=None):
                 "Use ;;msheet to see available actions.")
             return
         args = translate_cvar(args, data)
-        embed = await handle_action_monster(args, actions, ctx, data, sheet_id)
-        if embed is None:
+        embeds = await handle_action_monster(args, actions, ctx, data, sheet_id)
+        if embeds is None:
             return
-        await ctx.send(embed=embed)
+        view = Paginator(ctx.author, embeds) if len(embeds) > 1 else None
+        await ctx.send(embed=embeds[0], view=view)
     except Exception as e:
         print(e, traceback.format_exc())
         await ctx.send("Error. Please check input again. " + str(e))
@@ -2368,7 +2407,7 @@ async def handle_action_monster(
     else:
         choosen = 0
     name = possible_action['MonsterName'].iloc[choosen]
-    embed = create_action_result_embed(possible_action, choosen, name, ap)
+    embeds = create_action_result_embed(possible_action, choosen, name, ap)
     max_counts = possible_action['Maxcounts'].iloc[choosen]
     counts = possible_action['counts'].iloc[choosen]
     if max_counts > 0:
@@ -2377,16 +2416,16 @@ async def handle_action_monster(
         increment = f" ({format_bonus(str(-ap.counts))})"
         if new_counts < 0:
             new_counts = counts
-            embed.title = f"{name} cannot use {action_name}."
+            embeds[0].title = f"{name} cannot use {action_name}."
             increment = f" (Out of counts; {format_bonus(str(-ap.counts))})"
         elif new_counts > max_counts:
             new_counts = max_counts
         counts_value = draw_quota(max_counts, new_counts)
         counts_value += increment
-        embed.add_field(name=action_name, value=counts_value, inline=False)
+        embeds[0].add_field(name=action_name, value=counts_value, inline=False)
         df.loc[df['Name'] == action_name, 'counts'] = new_counts
         charaRepo.update_character(sheet_id, None, df.to_json())
-    return embed
+    return embeds
 
 
 @bot.command(aliases=["mc"])
