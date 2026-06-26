@@ -28,7 +28,7 @@ from repository import DowntimeMapRepository
 from repository import MonsterListRepository
 from repository import MonstersUserMapRepository
 from dnd_xml_parser import read_character_file, character_to_excel
-from ds_hero_parser import parse_ds_hero
+from ds_hero_parser import parse_ds_hero, apply_tier_bonuses
 import constant
 from pagination import Paginator
 from pydantic import BaseModel
@@ -665,6 +665,7 @@ async def handle_action(
         choosen = 0
     embed = create_action_result_embed(possible_action, choosen, name, ap)
     cost = possible_action['Cost'].iloc[choosen]
+    cost = "" if pd.isna(cost) else str(cost)
     if cost and cost.split(' ')[0] != '0':
         hr = resources.iloc[3]
         hr_name = hr["Name"]
@@ -909,13 +910,21 @@ def create_action_result_embed(
     bonus = str(possible_action['Bonus'].iloc[choosen])
     is_roll = str(possible_action['IsRoll'].iloc[choosen])
     image = str(possible_action['Image'].iloc[choosen])
-    cost = str(possible_action['Cost'].iloc[choosen])
+    cost = possible_action['Cost'].iloc[choosen]
+    cost = "" if pd.isna(cost) else str(cost)
     tgt = str(possible_action['Target'].iloc[choosen])
     range = str(possible_action['Range'].iloc[choosen])
     trigger = str(possible_action['Trigger'].iloc[choosen])
-    tier_1 = possible_action['T1'].iloc[choosen]
-    tier_2 = possible_action['T2'].iloc[choosen]
-    tier_3 = possible_action['T3'].iloc[choosen]
+    tier_1 = str(possible_action['T1'].iloc[choosen])
+    tier_2 = str(possible_action['T2'].iloc[choosen])
+    tier_3 = str(possible_action['T3'].iloc[choosen])
+    if 'FlatDmgBonus' in possible_action.columns:
+        flat_dmg = int(possible_action['FlatDmgBonus'].iloc[choosen] or 0)
+        kit_dmg_raw = possible_action['KitDmgBonus'].iloc[choosen]
+        kit_dmg = json.loads(kit_dmg_raw if isinstance(kit_dmg_raw, str) and kit_dmg_raw else "[]")
+        tier_1 = apply_tier_bonuses(tier_1, flat_dmg, kit_dmg, 0)
+        tier_2 = apply_tier_bonuses(tier_2, flat_dmg, kit_dmg, 1)
+        tier_3 = apply_tier_bonuses(tier_3, flat_dmg, kit_dmg, 2)
     if 'SmallText' in possible_action and possible_action['SmallText'].iloc[choosen]:
         embed_description += "\n" + str(possible_action['SmallText'].iloc[choosen])
     meta = ""

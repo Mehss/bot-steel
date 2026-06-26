@@ -219,26 +219,22 @@ def _collect_kit_bonuses(cls, level):
     return melee, ranged
 
 
-def _add_ability_damage(text, bonus):
-    """Add flat bonus to the leading number in the damage segment."""
-    if not bonus:
-        return text
-    return re.sub(r'^(\d+)(.*?\bdamage\b)', lambda m: str(int(m.group(1)) + bonus) + m.group(2), text, count=1)
+def apply_tier_bonuses(tier_str, flat_bonus, kit_bonuses, tier_idx):
+    """Apply flat and per-kit damage bonuses to a tier string at display time.
 
-
-def _apply_kit_bonuses(text, per_kit, tier_idx):
+    kit_bonuses is a list of (t1, t2, t3) tuples, one per kit.
+    '3 + M damage', flat=1, kits=[(2,2,2),(1,1,1)], idx=0 → '7/6 + M damage'
     """
-    Replace the leading base number with per-kit totals.
-    '3 + M or A damage' → '5/4 + M or A damage'
-    '5 damage'          → '7/6 damage'
-    """
-    vals = [b[tier_idx] for b in per_kit if b[tier_idx]]
-    if not vals:
-        return text
     def _replace(match):
-        base = int(match.group(1))
-        return "/".join(str(base + v) for v in vals) + match.group(2)
-    return re.sub(r'^(\d+)(.*? damage)', _replace, text, count=1)
+        base = int(match.group(1)) + flat_bonus
+        vals = [b[tier_idx] for b in kit_bonuses if b[tier_idx]]
+        if vals:
+            return "/".join(str(base + v) for v in vals) + match.group(2)
+        return str(base) + match.group(2)
+
+    if not flat_bonus and not any(b[tier_idx] for b in kit_bonuses):
+        return tier_str
+    return re.sub(r'^(\d+)(.*?\bdamage\b)', _replace, tier_str, count=1)
 
 
 # ---------------------------------------------------------------------------
@@ -270,7 +266,7 @@ def _ability_to_row(ability, characteristics, melee_bonus, ranged_bonus, ability
 
     cost_raw = ability.get("cost", 0)
     if cost_raw == "signature" or cost_raw == 0:
-        cost = None
+        cost = ""
     else:
         cost = f"{cost_raw} {resource_name}"
 
@@ -293,7 +289,7 @@ def _ability_to_row(ability, characteristics, melee_bonus, ranged_bonus, ability
             n = section.get("name", "")
             v = section.get("value", "")
             eff = section.get("effect", "")
-            field_parts.append(f"**{n}** ({v} {resource_name}): {eff}" if v else f"**{n}**: {eff}")
+            field_parts.append(f"**{n}** ({v} {resource_name}): {eff}" if v and str(v) != "0" else f"**{n}**: {eff}")
 
     keywords = ability.get("keywords", [])
     is_weapon_strike = "Weapon" in keywords and "Strike" in keywords
@@ -321,9 +317,9 @@ def _ability_to_row(ability, characteristics, melee_bonus, ranged_bonus, ability
     t1 = t2 = t3 = bonus = ""
 
     if roll_section:
-        t1 = _apply_kit_bonuses(_add_ability_damage(_sub_chars(roll_section.get("tier1", ""), characteristics), flat_dmg_bonus), kit_per_kit, 0)
-        t2 = _apply_kit_bonuses(_add_ability_damage(_sub_chars(roll_section.get("tier2", ""), characteristics), flat_dmg_bonus), kit_per_kit, 1)
-        t3 = _apply_kit_bonuses(_add_ability_damage(_sub_chars(roll_section.get("tier3", ""), characteristics), flat_dmg_bonus), kit_per_kit, 2)
+        t1 = _sub_chars(roll_section.get("tier1", ""), characteristics)
+        t2 = _sub_chars(roll_section.get("tier2", ""), characteristics)
+        t3 = _sub_chars(roll_section.get("tier3", ""), characteristics)
         chars = roll_section.get("characteristic", [])
         char_val = max((characteristics.get(c, 0) for c in chars), default=0)
         b_num = roll_section.get("bonus", 0)
@@ -346,6 +342,8 @@ def _ability_to_row(ability, characteristics, melee_bonus, ranged_bonus, ability
         "Target": target,
         "Range": range_str,
         "Trigger": trigger,
+        "FlatDmgBonus": flat_dmg_bonus,
+        "KitDmgBonus": json.dumps(kit_per_kit),
     }
 
 
@@ -355,6 +353,7 @@ def _build_actions_df(abilities, characteristics, melee_bonus, ranged_bonus, abi
         return pd.DataFrame(columns=[
             "Name", "Action", "Cost", "ShortDesc", "Effect", "IsRoll",
             "Bonus", "Image", "T1", "T2", "T3", "Target", "Range", "Trigger",
+            "FlatDmgBonus", "KitDmgBonus",
         ])
     return pd.DataFrame(rows)
 
