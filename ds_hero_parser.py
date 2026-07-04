@@ -610,7 +610,7 @@ def _build_data_df(hero, cls, level, characteristics):
     for char_name, val in characteristics.items():
         rows.append({"category": "STAT", "field_name": char_name, "value": val, "is_rollable": "TRUE"})
     for skill_name in _collect_skills(hero, cls, level):
-        rows.append({"category": "SKILL", "field_name": skill_name, "value": "", "is_rollable": "FALSE"})
+        rows.append({"category": "SKILL", "field_name": "SKILL", "value": skill_name, "is_rollable": "FALSE"})
 
     return pd.DataFrame(rows)
 

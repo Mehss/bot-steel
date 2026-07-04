@@ -12,15 +12,8 @@ DEBOUNCE = 1.0  # seconds to wait after last change before restarting
 
 def collect_mtimes():
     mtimes = {}
-    for path in WATCH_DIR.glob("*.py"):
-        if path.name == "run.py":
-            continue
-        try:
-            mtimes[path] = path.stat().st_mtime
-        except OSError:
-            pass
     for path in WATCH_DIR.glob("**/*.py"):
-        if "venv" in path.parts:
+        if path.name == "run.py" or "venv" in path.parts:
             continue
         try:
             mtimes[path] = path.stat().st_mtime
