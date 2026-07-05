@@ -36,6 +36,7 @@ from pydantic.dataclasses import dataclass, Field
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+from contextlib import asynccontextmanager
 from typing import List
 from PIL import Image, ImageOps, ImageDraw
 import pytz
@@ -53,7 +54,13 @@ downtimeRepo = None
 monsterRepo = None
 
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    asyncio.create_task(bot.start(TOKEN))
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 origins = [
     "http://localhost",
     "http://localhost:8080",
@@ -67,11 +74,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.on_event("startup")
-async def startup_event():
-    asyncio.create_task(bot.start(TOKEN))
 
 
 @app.get("/")

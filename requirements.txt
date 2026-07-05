@@ -13,3 +13,4 @@ yatg
 pymongo
 pymediawiki
 flask
+mysql-connector-python
