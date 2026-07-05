@@ -1417,6 +1417,10 @@ async def daily_task_run():
     #     f"```📅 {get_calendar_name()}```"
     # )
 
+@daily_task_run.before_loop
+async def before_daily_task_run():
+    await bot.wait_until_ready()
+
 
 def get_in_game_date(irl_day_number):
     months = [
