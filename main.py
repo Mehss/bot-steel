@@ -498,18 +498,21 @@ async def update_sheet(ctx: commands.Context, url=""):
         counters_data = counters_data.replace('#REF!', None, )
         counters_data = counters_data.dropna()
 
-        old_counter_data['count_numeric'] = pd.to_numeric(
-            old_counter_data['Count'], errors='coerce').fillna(0)
-        madf = pd.merge(
-            counters_data,
-            old_counter_data[['Name', 'count_numeric']],
-            on='Name',
-            how='left'
-        )
-        madf['Count'] = madf['count_numeric'].combine_first(
-            madf['Count']
-        )
-        madf = madf.drop(columns=['count_numeric'])
+        if 'Name' in old_counter_data.columns and 'Count' in old_counter_data.columns:
+            old_counter_data['count_numeric'] = pd.to_numeric(
+                old_counter_data['Count'], errors='coerce').fillna(0)
+            madf = pd.merge(
+                counters_data,
+                old_counter_data[['Name', 'count_numeric']],
+                on='Name',
+                how='left'
+            )
+            madf['Count'] = madf['count_numeric'].combine_first(
+                madf['Count']
+            )
+            madf = madf.drop(columns=['count_numeric'])
+        else:
+            madf = counters_data
 
         name = df_data[df_data['field_name'] == 'Name']['value'].iloc[0]
         charaRepo.set_character(
@@ -1335,7 +1338,7 @@ def get_calendar_name() -> str:
     range_end = range_start + datetime.timedelta(days=6)
 
     date = f"{range_start.day} {range_start.strftime('%B')} - {range_end.day} {range_end.strftime('%B')}"
-    chapter_number = delta_days // 7 + 1
+    chapter_number = (delta_days-1) // 7 + 1
     session_number = f"{delta_days:02}"
 
     return f"{chapter_number}.{session_number} [{date}]"
